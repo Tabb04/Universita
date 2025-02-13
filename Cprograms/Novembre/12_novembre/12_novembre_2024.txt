@@ -1,0 +1,43 @@
+//Assembler
+
+//rm-linux-gnueabihf-gcc -static -ggdb3 <<file.c>> <<file.s>>  (gia installato)
+
+
+
+//funzione che dato in ingresso il puntatore ad un vetore di interi, ritorna la somam dei valori
+//dispari, con il seguente prototipo
+
+//int sumodds(int *V, int n)
+
+//uso https://cpulator.01xz.net/?sys=arm&authuser=0
+
+//guarda cosa significano i flag NXCVI SVC  
+
+
+in C sumods:
+
+#define N 37
+static int V[N] = {-1, 5, ...} //è in memoria globale
+
+
+int sumodds(const int *V, unsigned int n) //unsigned?
+{
+    int sum = 0;
+    for(unsigned int i=0: i<n; ++i)
+        if (V[i] & 0x1) sum+=V[i];
+    return sum;
+}
+
+int main(){
+    printf("V=[%d", V[0]);
+    for(int i = 1; i<N; ++i) printf(",%d", V[i]);
+    printf("]\n");
+
+    printf("Risultato: %d\n", sumodds(V, N));
+    return 0;
+}
+
+
+//BL salva nel link register l'indirizzo dopo la funzione
+
+//Sistemi digitali e architettura dei calcolatori - progettare con tecnologia ARM

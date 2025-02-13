@@ -1,0 +1,35 @@
+//seguo lezione precedente
+//in C11 esiste thrd_create(...) fa partire un nuovo thread da quello principale
+/*
+thrd_create(puntatore a una variabile di tipo thrd_t in cui memorizza l'identificatore del thread appena
+creato, la funzione che deve eseguire, void *) void * puntatore a tipo indefinito
+*/
+
+//so che devo usare una sleep per aspettare che un thread abbia finito visto che potrebbero
+//servirmi i suoi dati ma non saprei quando aspettare e potrei sprecare tempo
+
+//allora utilizzo thrd_join. Attende la terminazione del processo e recupera il valore di ritorno.
+//thrd_join(id, int* -> valore di ritorno della chiamata del thread)
+
+//se voglio non attendere che il thread termina e voglio continuare devo usare un altra fuzione
+//thrd_detach(id) -> non aspetto che il thread termina, lascio fare al sistema operativo
+//sarà l'os a gestirlo, e libererà lui la memoria quando termina
+
+//se provo a fare join su un thread detachato non posso, operazione irreversibile
+
+//se faccio una detatch e poi faccio sleep su quel thread l'esecuzione se ne frega e continua
+//ignorando
+
+//se faccio invece dei thread che poi joino alla fine dove ognuno dorme un numero di secondi
+//casuale, il programma termina quando quello più lento ha finito perchè la join gestisce
+//tutti insieme
+
+//se faccio una funzione multi thread che incrementa un numero 1 milione di volte
+//provo a farla sia con valore che con valore atomico
+//utlizzo 5 thread. Quello atomico viene 5 milioni preciso, quello dichiarato normalmente un numero sui
+//2 milioni circa
+
+
+real    0m0,008s
+user    0m0,001s
+sys     0m0,008s

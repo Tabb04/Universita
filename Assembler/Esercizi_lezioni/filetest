@@ -1,0 +1,23 @@
+
+prova.o:     formato del file elf32-littlearm
+
+
+Disassemblamento della sezione .text:
+
+00000000 <main>:
+   0:	e3a00001 	mov	r0, #1
+   4:	e3a01002 	mov	r1, #2
+   8:	e1a0f00e 	mov	pc, lr
+
+Disassemblamento della sezione .ARM.attributes:
+
+00000000 <.ARM.attributes>:
+   0:	00001e41 	andeq	r1, r0, r1, asr #28
+   4:	61656100 	cmnvs	r5, r0, lsl #2
+   8:	01006962 	tsteq	r0, r2, ror #18
+   c:	00000014 	andeq	r0, r0, r4, lsl r0
+  10:	412d3705 			@ <UNDEFINED> instruction: 0x412d3705
+  14:	070a0600 	streq	r0, [sl, -r0, lsl #12]
+  18:	09010841 	stmdbeq	r1, {r0, r6, fp}
+  1c:	Address 0x1c is out of bounds.
+
