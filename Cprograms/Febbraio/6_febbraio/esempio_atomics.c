@@ -27,7 +27,7 @@ int main()
 		thrd_create(
 			&threads[i],
 			thread_func,
-			&thread_ids[i]
+			NULL //non so perchè usa &thread_ids[i]
 		);
 	}
 
