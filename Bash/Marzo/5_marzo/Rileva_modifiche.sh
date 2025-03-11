@@ -25,11 +25,11 @@
 #controllo se passato un parametro
 #CREDO SIA QUESTO RICONTROLLA
 if [ -z "$1" ]; then
-    echo "Uso $0 <directory>"
+    echo "Inserisci un parametro che sia una directory"
     exit 1
 fi
 
-FILE="$1"
+FILE="$1"       
 BACKUP="${FILE}.bak"
 
 #se il file di backup non eisste, crealo
@@ -44,7 +44,7 @@ diff "$BACKUP" "$FILE" > /dev/null                  #dev/null se non serve outpu
 if [ $? -eq 0 ]; then                               #$? -> contiene il ritorno dell'ultimo comando o confronto di una guardia
     echo "Nessuna modifica rilevata in $FILE"       #quindi se diff non trova differenze da 0
 
-else
+else 
     echo "Modifile rilevate in $FILE:"
     diff -u "$BACKUP" "$FILE"
     cp "$FILE" "$BACKUP" #aggiorna il backup
