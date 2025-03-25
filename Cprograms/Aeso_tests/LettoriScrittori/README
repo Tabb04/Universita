@@ -1,0 +1,16 @@
+--------------------------------------------
+
+RW-simple.c: versione base, con precedenza sempre ai lettori
+             (gli scrittori possono rimanere in attesa infinita).
+	     Con tanti lettori questo programma non termina perche'
+	     gli scrittori non riescono ad avanzare!
+
+RW-simple2.c: versione base, con precedenza sempre agli scrittori
+             (i lettori possono rimanere in attesa infinita). Per come
+	     e' costruito l'esempio, il programma termina sempre.
+
+RW-fair.c:  versione fair per lettori e scrittori realizzata con una variabile
+            di mutex per la coda di attesa (ordering).
+	    Non e' detto sia FIFO perche' lo standard non da alcuna garanzia
+	    sull'implementazione FIFO della coda della mutex.
+
