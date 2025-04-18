@@ -1,0 +1,164 @@
+OPERAZIONI SU FILE:
+
+1) OPEN: (-1)
+        int descrittore = open(nomefile.txt, 0_RDONLY)
+
+2) READ:
+        char buffer[BUFFER_SIZE]
+        while(byte_letti = read(descrittore, buffer, BUFFER_SIZE) > 0){
+            ...
+        }
+        if (byte_letti == -1 ){errore;}
+
+3) WRITE:
+        char buffer[BUFFER_SIZE]
+        while(...){
+            write(STDOUT_FILENO, buffer, byte_letti)
+        }
+
+4) CLOSE: (-1)
+        close(descrittore)
+
+----------------------------------------------------------------------------
+
+5) STAT: (-1)
+        int risultato
+        struct stat statfile
+        risultato = stat(FILENAME, &statfile) 
+
+6) OPENDIR: (NULL)
+        DIR *directory
+        directory = opendir(".") 
+
+7) READDIR 
+        struct dirent current
+        while((corrente = readdir(directory)) != NULL){
+                ... eventuale stampa ...
+        }
+
+8) CLOSEDIR (-1)
+        closedir(directory)
+
+-------------------------------------------------------------------------
+
+9) FORK:
+        pid_t pid;
+        pid = fork(); ... -1
+
+        pid == 0 -> FIGLIO
+        else -> PADRE
+
+10) EXECVP:
+        char *args[] = {"/bin/ls", "-l", NULL}
+        execvp(args[0], args)
+
+11) EXECLP
+        execlp("ls", "ls", "-l", NULL)
+
+12) WAITPID (-1)
+        ...
+        figlio fa exec
+        ...
+        padre(pid):
+        pid_t pid_risultato;
+        int stato;
+        pid_risultato = waitpid(pid, &stato, 0)
+        if (WIFEXITED(stato)){
+                .. stampa WIFEXITED(status)
+        }
+
+        (pid_risultato e pid corrispondono se tutto ok)
+
+---------------------------------------------------------------------------
+
+13) PIPE (-1)
+        int pipe1[2];
+        pipe(pipe1)
+
+        close(pipe1[0])  --> chiude lato lettura
+        close(pipe1[1])  --> chiude lato scrittura
+
+14) SCRIVERE
+        char msg[] = "Messaggio"
+        write(pipe1[1], msg, strlen(msg))
+
+15) LEGGERE
+        char buffer[BUFFER_SIZE]
+        read(pipe1[0], buffer, sizeof(buffer))
+
+---------------------------------------------------------------
+
+16) DUP2
+        dup2(fd[1], STDOUT_FILENO)     --> Ciò che scriverebbe a schermo sto processo lo scrive su pipe
+        ....
+        dup2(fd[0], STDIN_FILENO)      --> Invece di leggere da stdin legge dalla pipe sto processo
+
+        se faccio due exec e passo il risultato del primo al secondo è come fare:
+        primo comando | secondo comando
+
+---------------------------------------------------------------
+
+17) MQ_OPEN (-1)
+        mqd_t mq;
+        struct mq_attr attr;
+
+        attr.mq_flags = 0;
+        attr.mq_maxmsg = 10;
+        attr.mq_msgsize = 1024;
+        attr.mq_curmsgs = 0;
+
+        mq = mq_open(NOME_CON_/, O_CREAT | O_RDWR, 0644, &attr)
+        
+18) MQ_SEND (-1)
+        mq_send(mq, "Messaggio iniziale", strlen("Messaggio iniziale")+1, 0);
+
+19) MQ_RECIVE (-1)
+        char buffer[BUFF_SIZE];
+        mq_recive(mq, buffer, 1024, NULL)
+
+20) MQ_CLOSE (-1)
+        mq_close(mq)
+
+21) MQ_UNLINK (-1)
+        mq_unlink(NOME_CON_/)
+
+------------------------------------------------------------------
+
+22) SHM_OPEN (-1)
+        int fd = shm_open(NOME_SM, O_CREAT | O_RDWR, 0666);
+
+23) FTRUNCATE
+        ftruncate(fd, SHM_SIZE);
+
+24) MMAP (MAP_FAILED)
+        void *ptr = mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        ... in ordine dove mettere (se null decide kernel), cosa si può fare, tipo, fd, offset
+
+25) STRCPY
+        strcpy((char *)ptr, "Ciao consumatore!");
+        usata per scrivere in memoria condivisa ricastando
+
+26) NUNMAP
+        nunmap(ptr, MEM_SIZE);
+
+27) SHM_UNLINK
+        shm_unlink(NOME_SM);
+
+28) CLOSE
+        close(fd) -> devo chiudere sempre descrittore
+
+----------------------------------------------------------------------------------
+
+(SEM CON NOME)
+29) SEM_OPEN
+        sem_t *sem1 = sem_open("/nome", O_CREAT, 0600, 1);      -> se devo creare
+        sem_t *sem1 = sem_open("/nome", 0);                     -> se c'è già
+
+30) SEM_WAIT
+        sem_wait(sem1);
+
+31) SEM_POST
+        sem_post(sem1);
+
+
+
