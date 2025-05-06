@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "datatypes.h"
 #include "config.h"
+#include "logger.h" 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +9,7 @@
 #include <ctype.h>
 
 // Funzione trim_whitespace (può essere duplicata o messa in un file utils.c comune)
-static void trim_whitespace_res(char *str) { // rinominata per evitare conflitti se non è static
+static void trim_whitespace_prs(char *str) {
     if (!str) return;
     char *end;
     while (isspace((unsigned char)*str)) str++;
@@ -21,83 +22,138 @@ static void trim_whitespace_res(char *str) { // rinominata per evitare conflitti
 
 // Helper per il parsing di rescuers: prima contiamo gli elementi, poi allochiamo
 bool parse_rescuers(const char *filename, system_config_t *config) {
+    char log_msg_buffer[MAX_LINE_LENGTH + 200];
+
     if (!filename || !config) {
-        fprintf(stderr, "Errore: Argomenti nulli passati a parse_rescuers.\n");
+        sprintf(log_msg_buffer, "Tentativo di parsing con argomenti nulli (filename o config).");
+        log_message(LOG_EVENT_FILE_PARSING, "parse_rescuers", log_msg_buffer);
         return false;
     }
+
+    sprintf(log_msg_buffer, "Tentativo apertura file: %s", filename);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
 
     FILE *file = fopen(filename, "r");
-    if (!file) {
-        perror("Errore apertura file rescuers");
-        fprintf(stderr, "Impossibile aprire il file di configurazione soccorritori: %s\n", filename);
+    if (!file) { 
+        sprintf(log_msg_buffer, "Fallimento apertura file '%s': %s", filename, strerror(errno));
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
         return false;
     }
 
+    log_message(LOG_EVENT_FILE_PARSING, filename, "File aperto con successo.");
+
     char line[MAX_LINE_LENGTH];
-    int line_num = 0;
+    int line_num_pass1 = 0;
     int type_count = 0;
 
+
+
     // Primo Passaggio: Contare il numero di tipi di soccorritori validi
+
+    log_message(LOG_EVENT_FILE_PARSING, filename, "Inizio primo passaggio: conteggio tipi soccorritori.");
+
     while (fgets(line, sizeof(line), file)) {
-        line_num++;
-        line[strcspn(line, "\n")] = 0;
-        char *trimmed_line = line;
-        trim_whitespace_res(trimmed_line);
-        if (*trimmed_line == '\0' || *trimmed_line == '#') {
-            continue;
+        line_num_pass1++;
+        char count_line_buffer[MAX_LINE_LENGTH]; // Buffer per non modificare 'line' per sscanf
+        strncpy(count_line_buffer, line, MAX_LINE_LENGTH -1);
+        count_line_buffer[MAX_LINE_LENGTH-1] = '\0';
+        
+        count_line_buffer[strcspn(count_line_buffer, "\n")] = 0; // Rimuovi newline per il trim
+        trim_whitespace_prs(count_line_buffer);
+        
+        if (*count_line_buffer == '\0' || count_line_buffer[0] == '#') {
+            continue; // Ignora righe vuote o commenti
         }
-        // Fai un controllo base del formato per contare solo righe potenzialmente valide
-        if (sscanf(trimmed_line, " [%*[^]]] [%*d] [%*d] [%*d;%*d]") == 0) { // %* non assegna
-             // Questo sscanf è un po' rozzo per il conteggio, ma meglio di niente
-             // Potrebbe contare righe parzialmente errate. Una validazione completa è nel secondo pass.
+
+        // Controllo formato base per il conteggio
+        // Non logghiamo errori di formato qui, lo faremo nel secondo passaggio
+        char temp_name[RESCUER_NAME_MAX_LEN];
+        int temp_num, temp_speed, temp_x, temp_y;
+        if (sscanf(count_line_buffer, " [%[^]]] [%d] [%d] [%d;%d]", temp_name, &temp_num, &temp_speed, &temp_x, &temp_y) == 5) {
+            type_count++;
         }
-        type_count++;
     }
 
+    sprintf(log_msg_buffer, "Primo passaggio completato: Trovati %d potenziali tipi di soccorritori.", type_count);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+
     if (type_count == 0) {
-        fprintf(stdout, "Attenzione: Nessun tipo di soccorritore trovato nel file %s.\n", filename);
+        log_message(LOG_EVENT_FILE_PARSING, filename, "Nessun tipo di soccorritore trovato. Parsing completato (file vuoto o senza voci valide).");
         config->num_rescuer_types = 0;
         config->rescuer_types_array = NULL;
         config->total_digital_twins_to_create = 0;
         fclose(file);
-        return true; // Non un errore fatale se il file è vuoto ma valido
+        return true;
     }
 
-    // Alloca l'array per i tipi di soccorritori
     config->rescuer_types_array = (rescuer_type_t *)malloc(type_count * sizeof(rescuer_type_t));
     if (!config->rescuer_types_array) {
-        perror("Errore allocazione memoria per rescuer_types_array");
+        sprintf(log_msg_buffer, "Fallimento allocazione memoria per %d rescuer_type_t: %s", type_count, strerror(errno));
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
         fclose(file);
         return false;
     }
-    config->num_rescuer_types = 0; // Sarà incrementato nel secondo passaggio
+
+    sprintf(log_msg_buffer, "Allocato array per %d tipi di soccorritori.", type_count);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+
+    config->num_rescuer_types = 0;
     config->total_digital_twins_to_create = 0;
 
     // Riporta il file pointer all'inizio
     rewind(file);
-    line_num = 0;
+    int line_num_pass2 = 0;
     int current_type_idx = 0;
 
+    log_message(LOG_EVENT_FILE_PARSING, filename, "Inizio secondo passaggio: estrazione dati soccorritori.");
+
     // Secondo Passaggio: Leggere e popolare i dati
-    while (fgets(line, sizeof(line), file)) {
-        line_num++;
+    while (fgets(line, sizeof(line), file) && current_type_idx < type_count) {
+        
+        line_num_pass2++;
+        char original_line_for_log[MAX_LINE_LENGTH];
+        strncpy(original_line_for_log, line, MAX_LINE_LENGTH -1);
+        original_line_for_log[MAX_LINE_LENGTH-1] = '\0';
+        if (strchr(original_line_for_log, '\n')) *strchr(original_line_for_log, '\n') = '\0';
+        
         line[strcspn(line, "\n")] = 0;
         char *trimmed_line = line;
-        trim_whitespace_res(trimmed_line);
-        if (*trimmed_line == '\0' || *trimmed_line == '#') {
+        trim_whitespace_prs(trimmed_line);
+
+        if (*trimmed_line == '\0' || trimmed_line[0] == '#') {
             continue;
         }
 
         char name_buffer[RESCUER_NAME_MAX_LEN];
         int num_instances, speed, base_x, base_y;
 
+
         int matched = sscanf(trimmed_line, " [%[^]]] [%d] [%d] [%d;%d]",
                              name_buffer, &num_instances, &speed, &base_x, &base_y);
 
         if (matched != 5) {
-            fprintf(stderr, "Errore parsing rescuers: Formato linea non valido alla riga %d: '%s'\n", line_num, trimmed_line);
-            // Liberare memoria allocata finora per i nomi e l'array stesso
-            for (int i = 0; i < current_type_idx; ++i) {
+            sprintf(log_msg_buffer, "Riga %d: Errore formato: '%s'. Attesi 5 campi. Riga ignorata.", line_num_pass2, original_line_for_log);
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            // Non fatale per ora, continua con la prossima riga, ma non incrementare current_type_idx
+            // Se si volesse essere più severi, si potrebbe liberare e fallire.
+            // Per ora, il conteggio iniziale era solo una stima massima.
+            continue; // Ignora questa riga malformata e non la conta
+        }
+
+        if (num_instances <= 0 || speed <= 0 || base_x < 0 || base_y < 0 || strlen(name_buffer) == 0 || strlen(name_buffer) >= RESCUER_NAME_MAX_LEN) {
+            sprintf(log_msg_buffer, "Riga %d: Valori non validi per soccorritore (num=%d, speed=%d, base_x=%d, base_y=%d, nome_len=%zu). Riga: '%s'. Riga ignorata.",
+                    line_num_pass2, num_instances, speed, base_x, base_y, strlen(name_buffer), original_line_for_log);
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            continue; // Ignora questa riga con dati non validi
+        }
+
+        rescuer_type_t *current_rt = &config->rescuer_types_array[current_type_idx];
+        
+        current_rt->rescuer_type_name = strdup(name_buffer); // Alloca e copia nome
+        if (!current_rt->rescuer_type_name) {
+            sprintf(log_msg_buffer, "Riga %d: Fallimento allocazione memoria per nome soccorritore '%s': %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            for (int i = 0; i < current_type_idx; ++i) { // Libera nomi già allocati
                 free(config->rescuer_types_array[i].rescuer_type_name);
             }
             free(config->rescuer_types_array);
@@ -107,29 +163,6 @@ bool parse_rescuers(const char *filename, system_config_t *config) {
             return false;
         }
 
-        if (num_instances <= 0 || speed <= 0 || base_x < 0 || base_y < 0 || strlen(name_buffer) == 0) {
-            fprintf(stderr, "Errore parsing rescuers: Valori non validi (num=%d, speed=%d, base_x=%d, base_y=%d, nome='%s') alla riga %d\n",
-                    num_instances, speed, base_x, base_y, name_buffer, line_num);
-            // Cleanup come sopra
-            for (int i = 0; i < current_type_idx; ++i) free(config->rescuer_types_array[i].rescuer_type_name);
-            free(config->rescuer_types_array);
-            config->rescuer_types_array = NULL; config->num_rescuer_types = 0;
-            fclose(file);
-            return false;
-        }
-
-        rescuer_type_t *current_rt = &config->rescuer_types_array[current_type_idx];
-        
-        current_rt->rescuer_type_name = strdup(name_buffer); // Alloca e copia nome
-        if (!current_rt->rescuer_type_name) {
-            perror("Errore allocazione memoria per rescuer_type_name");
-            for (int i = 0; i < current_type_idx; ++i) free(config->rescuer_types_array[i].rescuer_type_name);
-            // Non c'è bisogno di liberare current_rt->rescuer_type_name perché è fallito strdup
-            free(config->rescuer_types_array);
-            config->rescuer_types_array = NULL; config->num_rescuer_types = 0;
-            fclose(file);
-            return false;
-        }
         current_rt->speed = speed;
         current_rt->x = base_x;
         current_rt->y = base_y;
@@ -140,30 +173,28 @@ bool parse_rescuers(const char *filename, system_config_t *config) {
         current_type_idx++;
         config->num_rescuer_types = current_type_idx; // Aggiorna il conteggio effettivo
 
-        printf("  Letto tipo soccorritore: %s (Speed: %d, Base: %d;%d) - Istanze da creare per questo tipo: %d\n",
-               current_rt->rescuer_type_name, current_rt->speed, current_rt->x, current_rt->y, num_instances);
+        sprintf(log_msg_buffer, "Riga %d: Estratto soccorritore: Nome='%s', Speed=%d, Base=(%d;%d). Istanze per questo tipo: %d",
+                line_num_pass2, current_rt->rescuer_type_name, current_rt->speed, current_rt->x, current_rt->y, num_instances);
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+
+        current_type_idx++; // Solo se la riga è valida e processata
 
     } // fine while fgets
 
+    config->num_rescuer_types = current_type_idx; // Numero effettivo di tipi validi letti
+
     fclose(file);
 
-    if (config->num_rescuer_types != type_count && type_count > 0) {
-        // Questo indica un errore nel conteggio del primo passaggio o un errore nel secondo
-        // che non ha portato a un return false immediato ma ha interrotto il loop.
-        // Per sicurezza, liberiamo tutto.
-        fprintf(stderr, "Discordanza nel conteggio dei tipi di soccorritori. Pulizia.\n");
-        for (int i = 0; i < config->num_rescuer_types; ++i) { // num_rescuer_types è l'idx corrente
-            free(config->rescuer_types_array[i].rescuer_type_name);
-        }
-        free(config->rescuer_types_array);
+    if (config->num_rescuer_types == 0 && type_count > 0) {
+        // Se il conteggio iniziale era > 0 ma non abbiamo letto nessun tipo valido nel secondo pass
+        sprintf(log_msg_buffer, "Nessun tipo di soccorritore valido estratto nel secondo passaggio, nonostante %d potenziali nel primo. Parsing fallito.", type_count);
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+        free(config->rescuer_types_array); // L'array era stato allocato
         config->rescuer_types_array = NULL;
-        config->num_rescuer_types = 0;
-        config->total_digital_twins_to_create = 0;
         return false;
     }
 
-
-    printf("Parsing soccorritori completato. Tipi letti: %d. Totale gemelli digitali da creare: %d\n",
-           config->num_rescuer_types, config->total_digital_twins_to_create);
+    sprintf(log_msg_buffer, "Completamento parsing: Letti %d tipi di soccorritori validi. Totale gemelli digitali da creare: %d.", config->num_rescuer_types, config->total_digital_twins_to_create);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
     return true;
 }

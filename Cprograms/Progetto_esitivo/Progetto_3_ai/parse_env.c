@@ -76,12 +76,14 @@ bool parse_environment(const char *filename, environment_t *env_config) {
 
         if (strchr(original_line_for_log, '\n')) *strchr(original_line_for_log, '\n') = '\0'; // Rimuovi solo per il log
 
-        line[strcspn(line, "\n")] = 0;
+        line[strcspn(line, "\n")] = 0; //tolgo \n anche alla riga
 
         char *trimmed_line = line;
         trim_whitespace(trimmed_line);
 
-        if (strlen(trimmed_line) == 0 || trimmed_line[0] == '#') {
+        if (strlen(trimmed_line) == 0 || trimmed_line[0] == '#'){
+            sprintf(log_msg_buffer, "Riga %d: '%s' - Ignorata (vuota o commento).", line_num, original_line_for_log);
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer); // Forse troppo verboso
             continue;
         }
 

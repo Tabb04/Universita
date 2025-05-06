@@ -87,14 +87,22 @@
 //Non so come fare a passare alla macro più parametri
 //tipo sopra dove ho "Fallimento apertura file %s: %s, filename, sterror(errno)"
 //se utilizzo macro al momento potrei solo utilizzare un parametro
-#define LOG_SCALL(val, fun, msg_buf, msg_with_params, event_type)\
+#define LOG_SCALL(val, fun, sprintf_args, event_type, id, msg_or_buf)\
     do{\
         if((val = fun) == -1){\
-            sprintf(msg_buf, msg_with_params);\
-            log_message(event_type, id, msg_buf);\
+            sprintf sprintf_args;\
+            log_message(event_type, id, msg_or_buf);\
             return false;\
         }\
     }while(0)\
 
+#define LOG_SNCALL(val, fun, sprintf_args, event_type, id, msg_or_buf)\
+    do{\
+        if((val = fun) == NULL){\
+            sprintf sprintf_args;\
+            log_message(event_type, id, msg_or_buf);\
+            return false;\
+        }\
+    }while(0)\
 
 #endif // ERROR_HANDLING_H
