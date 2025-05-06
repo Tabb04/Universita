@@ -125,9 +125,9 @@ OPERAZIONI SU FILE:
 ------------------------------------------------------------------
 
 22) SHM_OPEN (-1)
-        int fd = shm_open(NOME_SM, O_CREAT | O_RDWR, 0666);
+        int fd = shm_open(NOME_SM, O_CREAT | O_RDWR, 0600);
 
-23) FTRUNCATE
+23) FTRUNCATE (-1)
         ftruncate(fd, SHM_SIZE);
 
 24) MMAP (MAP_FAILED)
@@ -138,8 +138,8 @@ OPERAZIONI SU FILE:
         strcpy((char *)ptr, "Ciao consumatore!");
         usata per scrivere in memoria condivisa ricastando
 
-26) NUNMAP
-        nunmap(ptr, MEM_SIZE);
+26) MUNMAP -> toglie mappatura in memoria
+        munmap(ptr, MEM_SIZE);
 
 27) SHM_UNLINK
         shm_unlink(NOME_SM);
@@ -150,8 +150,8 @@ OPERAZIONI SU FILE:
 ----------------------------------------------------------------------------------
 
 (SEM CON NOME)
-29) SEM_OPEN
-        sem_t *sem1 = sem_open("/nome", O_CREAT, 0600, 1);      -> se devo creare
+29) SEM_OPEN (SEM_FAILED)
+        sem_t *sem1 = sem_open("/nome", O_CREAT, 0600, 0);      -> se devo creare
         sem_t *sem1 = sem_open("/nome", 0);                     -> se c'è già
 
 30) SEM_WAIT
@@ -160,5 +160,119 @@ OPERAZIONI SU FILE:
 31) SEM_POST
         sem_post(sem1);
 
+32) SEM_CLOSE (-1)
+        sem_close(sem1);
+
+33) SEM_UNLINK (-1)
+        sem_unlink("/nome")
+
+-----------------------------------------------------------------------------------
+
+(SEM SENZA NOME)
+34) SEM_INIT (-1)
+        sem_t *sem1;
+        sem_init(*sem1, 1, val_iniziale) -> primo se è pshared
+
+35) WAIT E POST -> uguali
+
+36) SEM_DESTROY (-1)
+        sem_destroy(&sem1);
 
 
+-----------------------------------------------------------------------------------
+
+(FUNZ DI SCRITTURA)
+37) SPRINTF
+        sprintf(message, "Messaggio n° %d", &val);
+
+38) SNPRINTF
+        snprintf(message, MAX_MSG_SIZE, "Messaggio n° %d", &val);
+        //sennò su un buffer
+        char buffer[DIM];
+        snprintf(buffer, sizeof(buffer), "Messaggio %d", &num);
+
+39) LETTURA E SALVATAGGIO
+        fgets(message, MAX_MSG_SIZE, stdin);
+        message[len - 1] = '\0'                 //presuppongo sia più piccolo di MAX_MSG_SIZE
+        mq_send(mq, message, strlen(message) + 1, 0);
+
+
+-------------------------------------------------------------------------------------
+
+(GESTIONE SEGNALI)
+38) SIGACTION (-1)
+        #include <signal.h>
+
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));             //-> inizializzo
+        sa. ...                                 //-> setto se voglio handler o sigaction
+        sigemptyset(&sa.sa_mask)                //-> serve per inizializzare la mask a vuoto
+        sa.sa_flags = ...                       //-> setto flags        
+        int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
+        // -> signum = segnale da gestire
+        // -> sigaction = azione da associare
+        // -> oldact = dove si memorizza la configurazione dell'azione precedente
+
+39) STRUCT SIGACTION
+        
+        struct sigaction{
+                void (*sa_handler)(int);
+                void (*sa_sigaction)(int, siginfo_t *, void*);
+                sigset_t sa_mask;
+                int sa_flags;
+                void (sa_restorer)(void);
+        }
+
+        // -> sa_hanlder = gestore semplice con un parametro
+        // -> sa_sigaction = gestore complesso utilizzabile se SA_SIGINFO in sa_flag è settato
+        // -> sa_mask = i segnali che verranno bloccati nell'esecuzione del gestore
+        // -> sa_flags = comportamento
+        // -> sa_restorer = non usato
+
+------------------------------------------------------------------------------------
+
+(COMANDI UTILI DA TERMINALE)
+
+40) PS
+        ps -aux -> elenca processi
+
+41) TOP 
+        top -> gestione risorse
+        htop -> uguale ma più organizzato
+
+42) IFCONFIG
+        ifconfig -> info su interfacce di rete
+
+43) LSOF
+        lsof -> lista dei descrittori aperti
+
+44) DF
+        df -h -> spazio disponibile
+
+45) PROC 
+        cd /proc/ -> file system virtuale, contiene info di sistema
+
+-------------------------------------------------------------------------------------
+
+(OPERAZIONI SU FILE ALTO LIVELLO)
+
+46) FOPEN (NULL)
+        FILE *file1;
+        file1 = fopen("noemfile.txt", "r");
+
+47) FREAD.
+        char buffer[BUFFER_SIZE];
+        size_t byte_letti = fread(buffer, 1, BUFFER_SIZE, file);
+        if(byte_letti < BUFF_SIZE && ferror(file)){
+                perror("...");
+        }
+
+48) FWRITE
+        const char *msg = "Messaggio"
+        size_t byte_scritti = fwrite(msg, 1, strlen(msg), file);
+        if(byte_scritti < strlen(msg)){
+                perror("Errore in scrittura");
+        }
+
+49) FCLOSE (-1)
+        fclose(file);

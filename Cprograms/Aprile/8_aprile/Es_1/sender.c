@@ -25,6 +25,11 @@ int main(){
     while(fgets(buffer, DIM_MSG, stdin) != NULL){
         mq_send(mq, buffer, strlen(buffer) + 1, 0);
     }
+
+    //invio messaggio di terminazione
+    strcpy(buffer, "EXIT!");
+    mq_send(mq, buffer, strlen(buffer) + 1, 0);
+    
     mq_close(mq);
     mq_unlink(NOME_CODA);
     return 0;

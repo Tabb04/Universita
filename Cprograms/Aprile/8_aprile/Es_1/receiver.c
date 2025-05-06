@@ -11,13 +11,17 @@
 
 int main(){
 
-    mqd_t mq = mq_open(NOME_CODA, O_CREAT | O_RDONLY, 0600, NULL);
+    mqd_t mq = mq_open(NOME_CODA, O_RDONLY, 0600, NULL);
     char buffer[DIM_MSG];
-    while(1){
-        __ssize_t byte_ricevuti = mq_receive(mq, buffer, DIM_MSG, NULL);
-        if(byte_ricevuti >= 0){
-            printf("Ricevuto %s\n", buffer);
-        }else{
+    while (1) {
+        ssize_t bytes_read = mq_receive(mq, buffer, DIM_MSG, NULL);
+        if (bytes_read >= 0) {
+            if (strcmp(buffer, "EXIT!") == 0) {
+                printf("Terminazione ricevuta. Chiudo il receiver.\n");
+                break;
+            }
+            printf("Ricevuto: %s", buffer);
+        } else {
             perror("mq_receive");
             break;
         }
