@@ -72,14 +72,20 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
     //inizializzo tutto
     
     while(fgets(riga, sizeof(riga), file)){
+
+
+        //CORREGGI DA QUI
+
+
+
         num_riga++;
         riga[strcspn(riga, "\n")] = 0;  //trova indice di \n, lo restituisce e ci scrive \0
-    
 
         char* riga_temp = riga; //mi serve pk strtok modifica in place
         rimuovi_spazi(riga_temp);
         if(strlen(riga_temp == 0)){
-            log_message(LOG_EVENT_FILE_PARSING, nome_file, "Riga %d vuota, ignoro", num_riga);
+            sprintf(log_msg_buffer, "Riga %d vuota, ignoro", num_riga++);
+            log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
             continue;               //riga vuota non mi interessa
         }
 
