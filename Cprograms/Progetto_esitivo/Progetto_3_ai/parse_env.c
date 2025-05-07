@@ -140,7 +140,7 @@ bool parse_environment(const char *filename, environment_t *env_config) {
         return false;
     }
     if(strlen(env_config->queue_name) == 0) {
-        log_message(LOG_EVENT_FILE_PARSING, filename, "Errore: Parametri obbligatori (queue, height, width) mancanti o non validi.");
+        log_message(LOG_EVENT_FILE_PARSING, filename, "Errore: Il nome della coda ('queue') non può essere vuoto.");
         return false;
     }
 

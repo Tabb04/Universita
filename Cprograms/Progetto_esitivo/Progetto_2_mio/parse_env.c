@@ -72,49 +72,92 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
     //inizializzo tutto
     
     while(fgets(riga, sizeof(riga), file)){
+        num_riga++; 
 
+        char riga_copia[LINE_LENGTH];   //faccio una copia per fare logging
+        strncpy(riga_copia, riga, LINE_LENGTH - 1);
+        riga_copia[LINE_LENGTH - 1] = '\0';
+        riga_copia[strcspn(riga_copia, "\n")] = '\0';
 
-        //CORREGGI DA QUI
+        riga[strcspn(riga, "\n")] = '\0';
+        rimuovi_spazi(riga);
 
-
-
-        num_riga++;
-        riga[strcspn(riga, "\n")] = 0;  //trova indice di \n, lo restituisce e ci scrive \0
-
-        char* riga_temp = riga; //mi serve pk strtok modifica in place
-        rimuovi_spazi(riga_temp);
-        if(strlen(riga_temp == 0)){
-            sprintf(log_msg_buffer, "Riga %d vuota, ignoro", num_riga++);
+        if(strlen(riga) == 0){
+            sprintf(log_msg_buffer, "Riga %d vuota, ignoro", num_riga);
             log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
-            continue;               //riga vuota non mi interessa
+            continue;
         }
 
-        char* nome = strtok(riga_temp, "=");
-        char* valore = strtok(NULL, "=");   //NULL vuol dire lavora sulla stessa stringa
-        //divido dove trovo l'uguale come sintassi data dal prof ma possibili spazi
-        //quindi faccio di nuovo rimuovi_spazi
+        //divido all'=
+        char* nome = strtok(riga, "=");
+        char* valore= strtok(NULL, "= ");   //null significa che proseguo da dove ho tagliato prima
 
         if(nome && valore){
             rimuovi_spazi(nome);
             rimuovi_spazi(valore);
 
-            //a questo punto presuppongo di avere stringhe senza spazi ben formattate
             if(strcmp(nome, "queue") == 0){
-                strncpy(env_config->queue_name, valore, sizeof(env_config->queue_name) -1);
-                env_config->queue_name[sizeof(env_config->queue_name) - 1] = '\0';
-                //metto sempre terminatore di stringa
-                //uso sizeof(env_config->queue_name perchè la ho definita come dimensione [LINE_LENGTH])
-                
-                coda_trovata = true;
-                sprintf(log_msg_buffer, "Da Riga %d ho estratto QUEUE = '%s'", num_riga, valore);
-                log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+                //presuppongo che lo / lo metto io da nome dato
+                //quindi non ne devo avere altri
+                if((strlen(nome) >= LINE_LENGTH) || strchr(nome, '/')){
+                    sprintf(log_msg_buffer, "Errore riga %d, nome troppo lungo o contentente carattere '\'", num_riga);
+                    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+                }else{
+                    strncpy(env_config->queue_name, valore, sizeof(env_config->queue_name) - 1);
+                    env_config->queue_name[sizeof(env_config->queue_name) - 1] = '\0';
+                    coda_trovata = true;
+                    sprintf(log_msg_buffer, "Coda trovata a riga %d: '%s'", num_riga, env_config->queue_name);
+                    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+                }
 
             }else if(strcmp(nome, "height") == 0){
-                if((sscanf(valore, "%d", &env_config->grid_height) != 1) || (env_config->grid_height <=0)){
-                    //il primo controllo guarda se è riuscito a convertire in intero 
+                if(sscanf(valore, "%d", &env_config->grid_height) != 1 || env_config->grid_height <= 0){
+                    sprintf(log_msg_buffer, "Errore riga %d, valore per height=%s non valido", num_riga, valore);
+                    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+                    fclose(file);
+                    return false;
+                }else{
+                    height_trovata = true;
+                    sprintf(log_msg_buffer, "Altezza trovata a riga %d: '%s'", num_riga, env_config->grid_height);
+                    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
                 }
+            }else if(strcmp(nome, "width") == 0){
+                if(sscanf(valore, "%d", &env_config->grid_width) != 1 || env_config->grid_width <= 0){
+                    sprintf(log_msg_buffer, "Errore riga %d, valore per width=%s non valido", num_riga, valore);
+                    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+                    fclose(file);
+                    return false;
+                }else{
+                    width_trovata = true;
+                    sprintf(log_msg_buffer, "Ampiezza trovata a riga %d: '%s'", num_riga, env_config->grid_width);
+                    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+                }
+            }else{
+                sprintf(log_msg_buffer, "Errore riga %d, chiave non riconosciuta per '%s'", num_riga, riga_copia);
+                log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
             }
-
+        }else{
+            sprintf(log_msg_buffer, "Errore riga %d, formato non valido (chiave=valore): '%s'", num_riga, riga_copia);
+            log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
         }
     }
+    
+    fclose(file);
+
+    //controllo se ho trovato tutti e tre i valori che mi servono
+    if(!coda_trovata || !height_trovata || !width_trovata){
+        log_message(LOG_EVENT_FILE_PARSING, nome_file, "Errore, uno dei tre parametri (nome coda, altezza, larghezza) non è stato trovato");
+        return false;
+    }
+
+    if(strlen(env_config->queue_name) == 0) {
+        log_message(LOG_EVENT_FILE_PARSING, nome_file, "Errore, il nome della coda non può essere vuoto");
+        //perchè se vuota comunque avrei coda_trovata a true
+        return false;
+    }
+
+    sprintf(log_msg_buffer, "Parsing completato: Nome coda=%s, Altezza=%d, Larghezza=%d", env_config->queue_name, env_config->grid_height, env_config->grid_width);
+    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+
+    return true;
 }
