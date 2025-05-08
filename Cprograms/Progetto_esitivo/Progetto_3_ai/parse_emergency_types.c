@@ -20,59 +20,388 @@ static void trim_whitespace_pet(char *str) {
 
 static rescuer_type_t* find_rescuer_type_in_array_pet(const char* name, const system_config_t* config) {
     for (int i = 0; i < config->num_rescuer_types; ++i) {
+        // Confronta il nome cercato con il nome di ciascun tipo di soccorritore disponibile
         if (strcmp(config->rescuer_types_array[i].rescuer_type_name, name) == 0) {
+            // Se trovato, restituisce un puntatore a quella struttura rescuer_type_t
             return &config->rescuer_types_array[i];
         }
     }
-    return NULL;
+    return NULL; // Se non trovato dopo aver scansionato tutto l'array
 }
+
+bool parse_emergency_types(const char *filename, system_config_t *config) {
+    // Buffer per costruire i messaggi di log formattati
+    char log_msg_buffer[MAX_LINE_LENGTH + 250]; // Abbastanza grande per contenere una riga e testo aggiuntivo
+
+    // 1. Validazione degli Input Iniziali
+    if (!filename || !config) { // Controlla se i puntatori a filename e config sono validi
+        sprintf(log_msg_buffer, "Tentativo di parsing con argomenti nulli (filename o config).");
+        log_message(LOG_EVENT_FILE_PARSING, "parse_emergency_types", log_msg_buffer);
+        return false; // Fallimento
+    }
+    // Controlla se la configurazione dei soccorritori (necessaria per validare le richieste) è presente
+    if (config->num_rescuer_types > 0 && !config->rescuer_types_array) {
+        sprintf(log_msg_buffer, "Configurazione soccorritori mancante o corrotta (num_rescuer_types=%d ma array nullo).", config->num_rescuer_types);
+        log_message(LOG_EVENT_FILE_PARSING, "parse_emergency_types", log_msg_buffer);
+        return false; // Fallimento
+    }
+
+    // 2. Apertura del File
+    sprintf(log_msg_buffer, "Tentativo apertura file: %s", filename);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+
+    FILE *file = fopen(filename, "r"); // Apre il file in modalità lettura ("r")
+    if (!file) { // Se fopen fallisce (restituisce NULL)
+        sprintf(log_msg_buffer, "Fallimento apertura file '%s': %s", filename, strerror(errno)); // strerror(errno) dà una descrizione testuale dell'errore di sistema
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+        return false; // Fallimento
+    }
+    log_message(LOG_EVENT_FILE_PARSING, filename, "File aperto con successo.");
+
+    // Variabili per il parsing
+    char line[MAX_LINE_LENGTH]; // Buffer per leggere una riga alla volta
+    int line_num_pass1 = 0;     // Contatore di righe per il primo passaggio
+    int type_count = 0;         // Numero stimato di tipi di emergenza (dal primo passaggio)
+
+    // 3. Primo Passaggio: Conteggio dei Tipi di Emergenza
+    // Serve per sapere quanta memoria allocare per l'array `emergency_types_array`.
+    log_message(LOG_EVENT_FILE_PARSING, filename, "Inizio primo passaggio: conteggio tipi emergenze.");
+    while (fgets(line, sizeof(line), file)) { // Legge una riga fino a EOF o errore
+        line_num_pass1++;
+        // Crea una copia della riga per lavorarci senza modificare 'line' che potrebbe essere usata da altre funzioni
+        char count_line_buffer[MAX_LINE_LENGTH];
+        strncpy(count_line_buffer, line, MAX_LINE_LENGTH-1);
+        count_line_buffer[MAX_LINE_LENGTH-1] = '\0'; // Assicura null-termination
+        
+        count_line_buffer[strcspn(count_line_buffer, "\n")] = 0; // Rimuove il newline
+        trim_whitespace_pet(count_line_buffer); // Rimuove spazi bianchi iniziali/finali
+
+        if (*count_line_buffer == '\0' || count_line_buffer[0] == '#') { // Ignora righe vuote o commenti
+            continue;
+        }
+        // Controllo di formato molto basilare solo per il conteggio.
+        // Se la riga sembra iniziare con un nome e una priorità, la contiamo.
+        // La validazione completa avviene nel secondo passaggio.
+        char temp_name[EMERGENCY_NAME_LENGTH];
+        short temp_prio;
+        if (sscanf(count_line_buffer, " [%[^]]] [%hd]", temp_name, &temp_prio) >= 2) {
+            type_count++;
+        }
+    }
+    sprintf(log_msg_buffer, "Primo passaggio completato: Trovati %d potenziali tipi di emergenze.", type_count);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+
+    // 4. Gestione File Vuoto o Senza Voci Valide
+    if (type_count == 0) {
+        log_message(LOG_EVENT_FILE_PARSING, filename, "Nessun tipo di emergenza trovato. Parsing completato (file vuoto o senza voci valide).");
+        config->num_emergency_types = 0;
+        config->emergency_types_array = NULL; // Assicura che sia NULL
+        fclose(file); // Chiude il file
+        return true; // Non è un errore fatale, il file potrebbe essere legittimamente vuoto.
+    }
+
+    // 5. Allocazione Memoria per l'Array dei Tipi di Emergenza
+    config->emergency_types_array = (emergency_type_t *)malloc(type_count * sizeof(emergency_type_t));
+    if (!config->emergency_types_array) { // Se malloc fallisce
+        sprintf(log_msg_buffer, "Fallimento allocazione memoria per %d emergency_type_t: %s", type_count, strerror(errno));
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+        fclose(file);
+        return false; // Errore fatale
+    }
+    sprintf(log_msg_buffer, "Allocato array per %d tipi di emergenze.", type_count);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+    config->num_emergency_types = 0; // Inizializza il contatore effettivo a 0 (sarà incrementato nel secondo pass)
+
+    // 6. Secondo Passaggio: Estrazione e Popolamento dei Dati
+    rewind(file); // Riporta il puntatore del file all'inizio per rileggere il file
+    int line_num_pass2 = 0;     // Contatore di righe per il secondo passaggio
+    int current_type_idx = 0;   // Indice per l'array `emergency_types_array`
+
+    log_message(LOG_EVENT_FILE_PARSING, filename, "Inizio secondo passaggio: estrazione dati emergenze.");
+    // Legge il file riga per riga, finché ci sono righe e non abbiamo riempito l'array allocato
+    // (current_type_idx < type_count è una sicurezza aggiuntiva)
+    while (fgets(line, sizeof(line), file) && current_type_idx < type_count) {
+        line_num_pass2++;
+        // Conserva una copia della riga originale per il logging degli errori
+        char original_line_for_log[MAX_LINE_LENGTH];
+        strncpy(original_line_for_log, line, MAX_LINE_LENGTH-1);
+        original_line_for_log[MAX_LINE_LENGTH-1] = '\0';
+        // Rimuovi newline dalla copia per il log, se presente
+        if (strchr(original_line_for_log, '\n')) *strchr(original_line_for_log, '\n') = '\0';
+        
+        // Lavora su una copia per il parsing, per non alterare `line` con strtok se usata altrove
+        char temp_line_for_parsing[MAX_LINE_LENGTH];
+        strcpy(temp_line_for_parsing, line);
+        char* current_line_ptr = temp_line_for_parsing; // Puntatore per scorrere la linea
+        current_line_ptr[strcspn(current_line_ptr, "\n")] = 0; // Rimuovi newline
+        trim_whitespace_pet(current_line_ptr); // Rimuovi spazi esterni
+
+        if (*current_line_ptr == '\0' || current_line_ptr[0] == '#') { // Ignora righe vuote o commenti
+            continue;
+        }
+
+        // Variabili per contenere i dati estratti dalla riga
+        char name_buffer[EMERGENCY_NAME_LENGTH];
+        short priority_val;
+        char rescuers_full_str[MAX_LINE_LENGTH] = ""; // Inizializza a stringa vuota
+
+        // Parsing manuale più robusto della riga (invece di un singolo sscanf complesso)
+        char *parser_ptr = current_line_ptr; // Puntatore ausiliario per il parsing
+
+        // Estrai Nome Emergenza: "[<name>]"
+        if (*parser_ptr != '[') { goto format_error_pet; } // Deve iniziare con '['
+        parser_ptr++; // Salta '['
+        char *name_end = strchr(parser_ptr, ']'); // Trova la ']' corrispondente
+        // Controlli di validità per il nome
+        if (!name_end || (name_end - parser_ptr) == 0 || (name_end - parser_ptr) >= EMERGENCY_NAME_LENGTH) { goto format_error_pet; }
+        strncpy(name_buffer, parser_ptr, name_end - parser_ptr); // Copia il nome
+        name_buffer[name_end - parser_ptr] = '\0'; // Null-termina
+        parser_ptr = name_end + 1; // Avanza il puntatore dopo ']'
+
+        // Estrai Priorità: "[<priority>]"
+        while(isspace((unsigned char)*parser_ptr)) parser_ptr++; // Salta spazi intermedi
+        if (*parser_ptr != '[') { goto format_error_pet; }
+        parser_ptr++; // Salta '['
+        char *prio_end = strchr(parser_ptr, ']'); // Trova la ']' corrispondente
+        if (!prio_end) { goto format_error_pet; }
+        char prio_str_buf[10]; // Buffer per la stringa della priorità
+        if((prio_end - parser_ptr) == 0 || (prio_end - parser_ptr) >= sizeof(prio_str_buf)) { goto format_error_pet; } // Lunghezza valida
+        strncpy(prio_str_buf, parser_ptr, prio_end - parser_ptr); // Copia la stringa della priorità
+        prio_str_buf[prio_end - parser_ptr] = '\0'; // Null-termina
+        if(sscanf(prio_str_buf, "%hd", &priority_val) != 1) { goto format_error_pet; } // Converte in short
+        parser_ptr = prio_end + 1; // Avanza il puntatore
+        
+        // Estrai Stringa dei Soccorritori (tutto il resto della riga)
+        while(isspace((unsigned char)*parser_ptr)) parser_ptr++; // Salta spazi
+        if(*parser_ptr != '\0') { // Se c'è ancora qualcosa sulla riga
+            strncpy(rescuers_full_str, parser_ptr, sizeof(rescuers_full_str)-1);
+            rescuers_full_str[sizeof(rescuers_full_str)-1] = '\0'; // Assicura null-termination
+        }
+
+        // Validazione dei valori estratti
+        if (priority_val < PRIORITY_LOW || priority_val > PRIORITY_HIGH) {
+            sprintf(log_msg_buffer, "Riga %d: Priorità emergenza (%hd) non valida. Valori ammessi: %d, %d, %d. Riga: '%s'. Riga ignorata.", line_num_pass2, priority_val, PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, original_line_for_log);
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            continue; // Ignora questa riga e passa alla successiva
+        }
+        if (strlen(rescuers_full_str) == 0) { // La specifica implica che ci siano sempre richieste
+            sprintf(log_msg_buffer, "Riga %d: Lista soccorritori mancante per emergenza '%s'. Riga: '%s'. Riga ignorata.", line_num_pass2, name_buffer, original_line_for_log);
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            continue; // Ignora questa riga
+        }
+
+        // --- Parsing della stringa dei soccorritori (`rescuers_full_str`) ---
+        // Esempio: "Pompieri:1,5;Ambulanza:1,2;"
+        int req_array_capacity = 5; // Capacità iniziale per l'array di richieste
+        rescuer_request_t *requests_arr = malloc(req_array_capacity * sizeof(rescuer_request_t));
+        if (!requests_arr) { // Se malloc fallisce
+            sprintf(log_msg_buffer, "Riga %d: Fallimento allocazione memoria per richieste soccorritori (emergenza '%s'): %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            goto error_cleanup_pet_fatal; // Errore fatale, esce dalla funzione
+        }
+        int actual_req_count = 0; // Contatore effettivo delle richieste valide per questa emergenza
+        char *current_rescuer_token; // Puntatore al token corrente (es. "Pompieri:1,5")
+        char *rest_of_rescuers_str = rescuers_full_str; // strtok_r modifica la stringa, quindi usa la copia
+        char *saveptr_token; // Puntatore per strtok_r (thread-safe)
+
+        // Divide la stringa `rescuers_full_str` usando ';' come delimitatore
+        while ((current_rescuer_token = strtok_r(rest_of_rescuers_str, ";", &saveptr_token)) != NULL) {
+            rest_of_rescuers_str = NULL; // Per le chiamate successive a strtok_r sulla stessa stringa
+            trim_whitespace_pet(current_rescuer_token); // Pulisce il token
+            if(strlen(current_rescuer_token) == 0) continue; // Ignora token vuoti (es. se c'è " ;; ")
+
+            // Variabili per il token corrente
+            char rt_name_buf[RESCUER_NAME_MAX_LEN];
+            int num_needed_val, time_needed_val;
+
+            // Parsa il token: "<rescuertype>:<number>,<time_in_secs>"
+            if (sscanf(current_rescuer_token, "%[^:]:%d,%d", rt_name_buf, &num_needed_val, &time_needed_val) != 3) {
+                sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Formato richiesta soccorritore non valido ('%s'). Richiesta ignorata.", line_num_pass2, name_buffer, current_rescuer_token);
+                log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+                continue; // Ignora questa singola richiesta malformata, ma continua con le altre della stessa emergenza
+            }
+            trim_whitespace_pet(rt_name_buf); // Pulisce il nome del tipo di soccorritore estratto
+
+            // Validazione dei dati della richiesta
+            if (num_needed_val <= 0 || time_needed_val <= 0 || strlen(rt_name_buf) == 0) {
+                sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Valori richiesta soccorritore non validi (num=%d, time=%d, nome='%s'). Richiesta ignorata.", line_num_pass2, name_buffer, num_needed_val, time_needed_val, rt_name_buf);
+                log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+                continue; // Ignora
+            }
+
+            // Cerca il tipo di soccorritore nell'array dei tipi disponibili
+            rescuer_type_t *found_rt = find_rescuer_type_in_array_pet(rt_name_buf, config);
+            if (!found_rt) { // Se il tipo non esiste
+                sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Tipo soccorritore '%s' non trovato nella configurazione dei soccorritori. Richiesta ignorata.", line_num_pass2, name_buffer, rt_name_buf);
+                log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+                continue; // Ignora
+            }
+
+            // Se l'array `requests_arr` è pieno, rialloca per più spazio
+            if (actual_req_count >= req_array_capacity) {
+                req_array_capacity *= 2; // Raddoppia la capacità
+                rescuer_request_t *temp_req_arr = realloc(requests_arr, req_array_capacity * sizeof(rescuer_request_t));
+                if (!temp_req_arr) { // Se realloc fallisce
+                    sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Fallimento riallocazione memoria per richieste soccorritori: %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
+                    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+                    free(requests_arr); // Libera l'array parzialmente popolato
+                    goto error_cleanup_pet_fatal; // Errore fatale
+                }
+                requests_arr = temp_req_arr; // Aggiorna il puntatore all'array riallocato
+            }
+            // Popola la struttura rescuer_request_t
+            requests_arr[actual_req_count].type = found_rt; // Puntatore al tipo di soccorritore trovato
+            requests_arr[actual_req_count].required_count = num_needed_val;
+            requests_arr[actual_req_count].time_to_manage = time_needed_val;
+            actual_req_count++; // Incrementa il contatore delle richieste valide per questa emergenza
+        } // Fine loop strtok_r per le richieste di soccorritori
+
+        // Se, dopo aver processato la stringa dei soccorritori, non ne abbiamo trovata nessuna valida,
+        // l'intera riga del tipo di emergenza viene considerata non valida.
+        if (actual_req_count == 0) {
+            sprintf(log_msg_buffer, "Riga %d: Nessuna richiesta soccorritore valida trovata per emergenza '%s' dalla stringa '%s'. Riga ignorata.", line_num_pass2, name_buffer, rescuers_full_str);
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            free(requests_arr); // `requests_arr` era stato allocato, quindi va liberato
+            continue; // Passa alla prossima riga del file
+        }
+        
+        // --- Fine Parsing Stringa Soccorritori ---
+
+        // Se tutto è andato bene finora, popola la struttura emergency_type_t
+        emergency_type_t *current_et_ptr = &config->emergency_types_array[current_type_idx];
+        
+        current_et_ptr->emergency_desc = strdup(name_buffer); // Alloca memoria e copia il nome dell'emergenza
+        if (!current_et_ptr->emergency_desc) { // Se strdup fallisce
+            sprintf(log_msg_buffer, "Riga %d: Fallimento allocazione memoria per nome emergenza '%s': %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+            free(requests_arr); // Libera l'array di richieste per questa emergenza che non verrà aggiunta
+            goto error_cleanup_pet_fatal; // Errore fatale
+        }
+        current_et_ptr->priority = priority_val;
+        current_et_ptr->rescuers = requests_arr; // Assegna l'array di richieste (già allocato e popolato)
+        current_et_ptr->rescuers_req_number = actual_req_count; // Numero di richieste valide
+
+        // Log del tipo di emergenza estratto con successo
+        sprintf(log_msg_buffer, "Riga %d: Estratta emergenza: Nome='%s', Priorità=%hd, N.Richieste Socc.=%d",
+                line_num_pass2, current_et_ptr->emergency_desc, current_et_ptr->priority, current_et_ptr->rescuers_req_number);
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+        // Log dettagliato di ogni richiesta per questa emergenza (opzionale ma utile)
+        for(int k=0; k < actual_req_count; ++k) {
+            sprintf(log_msg_buffer, "    Richiesta %d: TipoSocc='%s', NumRichiesti=%d, TempoGestione=%d sec", k+1, requests_arr[k].type->rescuer_type_name, requests_arr[k].required_count, requests_arr[k].time_to_manage);
+            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+        }
+        
+        current_type_idx++; // Incrementa l'indice per il prossimo tipo di emergenza valido
+        continue; // Passa alla prossima riga del file
+
+    // Etichetta per errori di formato non fatali per il parsing dell'INTERO file, ma che invalidano la riga CORRENTE.
+    format_error_pet:
+        sprintf(log_msg_buffer, "Riga %d: Errore formato: '%s'. Riga ignorata.", line_num_pass2, original_line_for_log);
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+        // Non incrementare current_type_idx, semplicemente continua con la prossima riga del file.
+        continue; 
+    } // Fine loop while (fgets) per il secondo passaggio
+
+    // Imposta il numero effettivo di tipi di emergenza validi letti
+    config->num_emergency_types = current_type_idx;
+
+    fclose(file); // Chiude il file
+
+    // Controllo finale: se non abbiamo letto nessun tipo valido nel secondo passaggio
+    // nonostante il primo passaggio ne avesse stimati alcuni, è un problema.
+    if (config->num_emergency_types == 0 && type_count > 0) {
+        sprintf(log_msg_buffer, "Nessun tipo di emergenza valido estratto nel secondo passaggio, nonostante %d potenziali candidati dal primo passaggio. Parsing considerato fallito.", type_count);
+        log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+        if (config->emergency_types_array) free(config->emergency_types_array); // L'array era stato allocato
+        config->emergency_types_array = NULL;
+        return false; // Fallimento
+    }
+
+    // Log di completamento del parsing
+    sprintf(log_msg_buffer, "Completamento parsing: Letti %d tipi di emergenze validi.", config->num_emergency_types);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+    return true; // Successo
+
+// Etichetta per errori fatali (solitamente allocazione di memoria) che interrompono l'intero parsing.
+error_cleanup_pet_fatal:
+    // Libera la memoria allocata finora per i tipi di emergenza e le loro sotto-strutture.
+    // `current_type_idx` indica quanti tipi sono stati *completamente e validamente* aggiunti.
+    // Le risorse per il tipo *corrente* che ha causato l'errore potrebbero non essere in `config->emergency_types_array`
+    // o potrebbero essere parzialmente allocate (es. `requests_arr` ma non `emergency_desc`).
+    // Questa cleanup è una best-effort. La funzione `free_system_config` farà una pulizia più completa.
+    for (int i = 0; i < current_type_idx; ++i) {
+        if (config->emergency_types_array[i].emergency_desc) free(config->emergency_types_array[i].emergency_desc);
+        if (config->emergency_types_array[i].rescuers) free(config->emergency_types_array[i].rescuers);
+    }
+    if (config->emergency_types_array) free(config->emergency_types_array);
+    config->emergency_types_array = NULL;
+    config->num_emergency_types = 0;
+    if(file) fclose(file); // Assicura che il file sia chiuso
+    // Non è necessario loggare qui perché l'errore specifico è già stato loggato prima del goto.
+    return false; // Fallimento
+}
+
+
+
+
+
+
+/*
 
 bool parse_emergency_types(const char *filename, system_config_t *config) {
     char log_msg_buffer[MAX_LINE_LENGTH + 250];
 
-    if (!filename || !config) {
+    if (!filename || !config) { // Controlla se i puntatori a filename e config sono validi
         sprintf(log_msg_buffer, "Tentativo di parsing con argomenti nulli (filename o config).");
         log_message(LOG_EVENT_FILE_PARSING, "parse_emergency_types", log_msg_buffer);
-        return false;
+        return false; // Fallimento
     }
+    // Controlla se la configurazione dei soccorritori (necessaria per validare le richieste) è presente
     if (config->num_rescuer_types > 0 && !config->rescuer_types_array) {
         sprintf(log_msg_buffer, "Configurazione soccorritori mancante o corrotta (num_rescuer_types=%d ma array nullo).", config->num_rescuer_types);
         log_message(LOG_EVENT_FILE_PARSING, "parse_emergency_types", log_msg_buffer);
-        return false;
+        return false; // Fallimento
     }
 
 
     sprintf(log_msg_buffer, "Tentativo apertura file: %s", filename);
     log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
 
-    FILE *file = fopen(filename, "r");
-    if (!file) {
-        sprintf(log_msg_buffer, "Fallimento apertura file '%s': %s", filename, strerror(errno));
+    FILE *file = fopen(filename, "r"); // Apre il file in modalità lettura ("r")
+    if (!file) { // Se fopen fallisce (restituisce NULL)
+        sprintf(log_msg_buffer, "Fallimento apertura file '%s': %s", filename, strerror(errno)); // strerror(errno) dà una descrizione testuale dell'errore di sistema
         log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-        return false;
+        return false; // Fallimento
     }
     log_message(LOG_EVENT_FILE_PARSING, filename, "File aperto con successo.");
 
-    char line[MAX_LINE_LENGTH];
-    int line_num_pass1 = 0;
-    int type_count = 0;
+    // Variabili per il parsing
+    char line[MAX_LINE_LENGTH]; // Buffer per leggere una riga alla volta
+    int line_num_pass1 = 0;     // Contatore di righe per il primo passaggio
+    int type_count = 0;         // Numero stimato di tipi di emergenza (dal primo passaggio)
 
     log_message(LOG_EVENT_FILE_PARSING, filename, "Inizio primo passaggio: conteggio tipi emergenze.");
+    
     while (fgets(line, sizeof(line), file)) {
         line_num_pass1++;
+        // Crea una copia della riga per lavorarci senza modificare 'line' che potrebbe essere usata da altre funzioni
         char count_line_buffer[MAX_LINE_LENGTH];
         strncpy(count_line_buffer, line, MAX_LINE_LENGTH-1);
-        count_line_buffer[MAX_LINE_LENGTH-1] = '\0';
-        count_line_buffer[strcspn(count_line_buffer, "\n")] = 0;
-        trim_whitespace_pet(count_line_buffer);
+        count_line_buffer[MAX_LINE_LENGTH-1] = '\0'; // Assicura null-termination
+        
+        count_line_buffer[strcspn(count_line_buffer, "\n")] = 0; // Rimuove il newline
+        trim_whitespace_pet(count_line_buffer); // Rimuove spazi bianchi iniziali/finali
 
         if (*count_line_buffer == '\0' || count_line_buffer[0] == '#') {
             continue;
         }
-        // Controllo formato base
+
+        // Controllo di formato molto basilare solo per il conteggio.
+        // Se la riga sembra iniziare con un nome e una priorità, la contiamo.
+        // La validazione completa avviene nel secondo passaggio.
         char temp_name[EMERGENCY_NAME_LENGTH];
         short temp_prio;
-        if (sscanf(count_line_buffer, " [%[^]]] [%hd]", temp_name, &temp_prio) >= 2) { // >= 2 perché la parte rescuers può non essere valida per sscanf
+        if (sscanf(count_line_buffer, " [%[^]]] [%hd]", temp_name, &temp_prio) >= 2) {
             type_count++;
         }
     }
@@ -82,174 +411,208 @@ bool parse_emergency_types(const char *filename, system_config_t *config) {
     if (type_count == 0) {
         log_message(LOG_EVENT_FILE_PARSING, filename, "Nessun tipo di emergenza trovato. Parsing completato (file vuoto o senza voci valide).");
         config->num_emergency_types = 0;
-        config->emergency_types_array = NULL;
-        fclose(file);
-        return true;
+        config->emergency_types_array = NULL; // Assicura che sia NULL
+        fclose(file); // Chiude il file
+        return true; // Non è un errore fatale, il file potrebbe essere legittimamente vuoto.
     }
 
+    // 5. Allocazione Memoria per l'Array dei Tipi di Emergenza
     config->emergency_types_array = (emergency_type_t *)malloc(type_count * sizeof(emergency_type_t));
-    if (!config->emergency_types_array) {
+    if (!config->emergency_types_array) { // Se malloc fallisce
         sprintf(log_msg_buffer, "Fallimento allocazione memoria per %d emergency_type_t: %s", type_count, strerror(errno));
         log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
         fclose(file);
-        return false;
+        return false; // Errore fatale
     }
+
     sprintf(log_msg_buffer, "Allocato array per %d tipi di emergenze.", type_count);
     log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-    config->num_emergency_types = 0;
+    config->num_emergency_types = 0; // Inizializza il contatore effettivo a 0 (sarà incrementato nel secondo pass)
 
-    rewind(file);
-    int line_num_pass2 = 0;
-    int current_type_idx = 0;
+    // 6. Secondo Passaggio: Estrazione e Popolamento dei Dati
+    rewind(file); // Riporta il puntatore del file all'inizio per rileggere il file
+    int line_num_pass2 = 0;     // Contatore di righe per il secondo passaggio
+    int current_type_idx = 0;   // Indice per l'array `emergency_types_array`
 
     log_message(LOG_EVENT_FILE_PARSING, filename, "Inizio secondo passaggio: estrazione dati emergenze.");
+    // Legge il file riga per riga, finché ci sono righe e non abbiamo riempito l'array allocato
+    // (current_type_idx < type_count è una sicurezza aggiuntiva)
+
     while (fgets(line, sizeof(line), file) && current_type_idx < type_count) {
         line_num_pass2++;
+        // Conserva una copia della riga originale per il logging degli errori
         char original_line_for_log[MAX_LINE_LENGTH];
         strncpy(original_line_for_log, line, MAX_LINE_LENGTH-1);
         original_line_for_log[MAX_LINE_LENGTH-1] = '\0';
+        // Rimuovi newline dalla copia per il log, se presente
         if (strchr(original_line_for_log, '\n')) *strchr(original_line_for_log, '\n') = '\0';
         
+        // Lavora su una copia per il parsing, per non alterare `line` con strtok se usata altrove
         char temp_line_for_parsing[MAX_LINE_LENGTH];
-        strcpy(temp_line_for_parsing, line); // Usiamo una copia per strtok e modifiche
-        char* current_line_ptr = temp_line_for_parsing;
-        current_line_ptr[strcspn(current_line_ptr, "\n")] = 0;
-        trim_whitespace_pet(current_line_ptr);
+        strcpy(temp_line_for_parsing, line);
+        char* current_line_ptr = temp_line_for_parsing; // Puntatore per scorrere la linea
+        current_line_ptr[strcspn(current_line_ptr, "\n")] = 0; // Rimuovi newline
+        trim_whitespace_pet(current_line_ptr); // Rimuovi spazi esterni
 
         if (*current_line_ptr == '\0' || current_line_ptr[0] == '#') {
             continue;
         }
 
+        // Variabili per contenere i dati estratti dalla riga
         char name_buffer[EMERGENCY_NAME_LENGTH];
         short priority_val;
-        char rescuers_full_str[MAX_LINE_LENGTH] = "";
+        char rescuers_full_str[MAX_LINE_LENGTH] = ""; // Inizializza a stringa vuota
 
-        char *parser_ptr = current_line_ptr;
-        // Estrai nome
-        if (*parser_ptr != '[') { goto format_error_pet; } parser_ptr++;
-        char *name_end = strchr(parser_ptr, ']');
+        // Parsing manuale più robusto della riga (invece di un singolo sscanf complesso)
+        char *parser_ptr = current_line_ptr; // Puntatore ausiliario per il parsing
+
+        // Estrai Nome Emergenza: "[<name>]"
+        if (*parser_ptr != '[') { goto format_error_pet; } // Deve iniziare con '['
+        parser_ptr++; // Salta '['
+        char *name_end = strchr(parser_ptr, ']'); // Trova la ']' corrispondente
         if (!name_end || (name_end - parser_ptr) == 0 || (name_end - parser_ptr) >= EMERGENCY_NAME_LENGTH) { goto format_error_pet; }
-        strncpy(name_buffer, parser_ptr, name_end - parser_ptr);
-        name_buffer[name_end - parser_ptr] = '\0';
-        parser_ptr = name_end + 1;
+        strncpy(name_buffer, parser_ptr, name_end - parser_ptr); // Copia il nome
+        name_buffer[name_end - parser_ptr] = '\0'; // Null-termina
+        parser_ptr = name_end + 1; // Avanza il puntatore dopo ']'
 
-        // Estrai priorità
-        while(isspace((unsigned char)*parser_ptr)) parser_ptr++;
-        if (*parser_ptr != '[') { goto format_error_pet; } parser_ptr++;
-        char *prio_end = strchr(parser_ptr, ']');
+        // Estrai Priorità: "[<priority>]"
+        while(isspace((unsigned char)*parser_ptr)) parser_ptr++; // Salta spazi intermedi
+        if (*parser_ptr != '[') { goto format_error_pet; }
+        parser_ptr++; // Salta '['
+        char *prio_end = strchr(parser_ptr, ']'); // Trova la ']' corrispondente
         if (!prio_end) { goto format_error_pet; }
-        char prio_str_buf[10];
-        if((prio_end - parser_ptr) == 0 || (prio_end - parser_ptr) >= sizeof(prio_str_buf)) { goto format_error_pet; }
-        strncpy(prio_str_buf, parser_ptr, prio_end - parser_ptr);
-        prio_str_buf[prio_end - parser_ptr] = '\0';
-        if(sscanf(prio_str_buf, "%hd", &priority_val) != 1) { goto format_error_pet; }
-        parser_ptr = prio_end + 1;
+        char prio_str_buf[10]; // Buffer per la stringa della priorità
+        if((prio_end - parser_ptr) == 0 || (prio_end - parser_ptr) >= sizeof(prio_str_buf)) { goto format_error_pet; } // Lunghezza valida
+        strncpy(prio_str_buf, parser_ptr, prio_end - parser_ptr); // Copia la stringa della priorità
+        prio_str_buf[prio_end - parser_ptr] = '\0'; // Null-termina
+        if(sscanf(prio_str_buf, "%hd", &priority_val) != 1) { goto format_error_pet; } // Converte in short
+        parser_ptr = prio_end + 1; // Avanza il puntatore
         
-        // Estrai stringa rescuers
-        while(isspace((unsigned char)*parser_ptr)) parser_ptr++;
-        if(*parser_ptr != '\0') {
+        // Estrai Stringa dei Soccorritori (tutto il resto della riga)
+        while(isspace((unsigned char)*parser_ptr)) parser_ptr++; // Salta spazi
+        if(*parser_ptr != '\0') { // Se c'è ancora qualcosa sulla riga
             strncpy(rescuers_full_str, parser_ptr, sizeof(rescuers_full_str)-1);
-            rescuers_full_str[sizeof(rescuers_full_str)-1] = '\0';
+            rescuers_full_str[sizeof(rescuers_full_str)-1] = '\0'; // Assicura null-termination
         }
 
+        // Validazione dei valori estratti
         if (priority_val < PRIORITY_LOW || priority_val > PRIORITY_HIGH) {
-            sprintf(log_msg_buffer, "Riga %d: Priorità emergenza (%hd) non valida. Riga: '%s'. Riga ignorata.", line_num_pass2, priority_val, original_line_for_log);
+            sprintf(log_msg_buffer, "Riga %d: Priorità emergenza (%hd) non valida. Valori ammessi: %d, %d, %d. Riga: '%s'. Riga ignorata.", line_num_pass2, priority_val, PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, original_line_for_log);
             log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-            continue;
+            continue; // Ignora questa riga e passa alla successiva
         }
-        if (strlen(rescuers_full_str) == 0) {
+
+        if (strlen(rescuers_full_str) == 0) { // La specifica implica che ci siano sempre richieste
             sprintf(log_msg_buffer, "Riga %d: Lista soccorritori mancante per emergenza '%s'. Riga: '%s'. Riga ignorata.", line_num_pass2, name_buffer, original_line_for_log);
             log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-            continue;
+            continue; // Ignora questa riga
         }
 
-        // --- Parsing della stringa dei soccorritori ---
-        int req_array_capacity = 5;
+        // --- Parsing della stringa dei soccorritori (`rescuers_full_str`) ---
+        // Esempio: "Pompieri:1,5;Ambulanza:1,2;"
+        int req_array_capacity = 5; // Capacità iniziale per l'array di richieste
         rescuer_request_t *requests_arr = malloc(req_array_capacity * sizeof(rescuer_request_t));
-        if (!requests_arr) {
+        if (!requests_arr) { // Se malloc fallisce
             sprintf(log_msg_buffer, "Riga %d: Fallimento allocazione memoria per richieste soccorritori (emergenza '%s'): %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
             log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-            goto error_cleanup_pet_fatal; // Errore fatale
+            goto error_cleanup_pet_fatal; // Errore fatale, esce dalla funzione
         }
-        int actual_req_count = 0;
-        char *current_rescuer_token;
-        char *rest_of_rescuers_str = rescuers_full_str; // Lavora sulla copia
-        char *saveptr_token;
 
+        int actual_req_count = 0; // Contatore effettivo delle richieste valide per questa emergenza
+        char *current_rescuer_token; // Puntatore al token corrente (es. "Pompieri:1,5")
+        char *rest_of_rescuers_str = rescuers_full_str; // strtok_r modifica la stringa, quindi usa la copia
+        char *saveptr_token; // Puntatore per strtok_r (thread-safe)
+
+        // Divide la stringa `rescuers_full_str` usando ';' come delimitatore
         while ((current_rescuer_token = strtok_r(rest_of_rescuers_str, ";", &saveptr_token)) != NULL) {
-            rest_of_rescuers_str = NULL;
-            trim_whitespace_pet(current_rescuer_token);
-            if(strlen(current_rescuer_token) == 0) continue;
-
+            rest_of_rescuers_str = NULL; // Per le chiamate successive a strtok_r sulla stessa stringa
+            trim_whitespace_pet(current_rescuer_token); // Pulisce il token
+            if(strlen(current_rescuer_token) == 0) continue; // Ignora token vuoti (es. se c'è " ;; ")
+            
+            // Variabili per il token corrente
             char rt_name_buf[RESCUER_NAME_MAX_LEN];
             int num_needed_val, time_needed_val;
 
+            // Parsa il token: "<rescuertype>:<number>,<time_in_secs>"
             if (sscanf(current_rescuer_token, "%[^:]:%d,%d", rt_name_buf, &num_needed_val, &time_needed_val) != 3) {
                 sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Formato richiesta soccorritore non valido ('%s'). Richiesta ignorata.", line_num_pass2, name_buffer, current_rescuer_token);
                 log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-                continue; // Ignora questa singola richiesta malformata
+                continue; // Ignora questa singola richiesta malformata, ma continua con le altre della stessa emergenza
             }
-            trim_whitespace_pet(rt_name_buf);
+            trim_whitespace_pet(rt_name_buf); // Pulisce il nome del tipo di soccorritore estratto
 
+            // Validazione dei dati della richiesta
             if (num_needed_val <= 0 || time_needed_val <= 0 || strlen(rt_name_buf) == 0) {
                 sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Valori richiesta soccorritore non validi (num=%d, time=%d, nome='%s'). Richiesta ignorata.", line_num_pass2, name_buffer, num_needed_val, time_needed_val, rt_name_buf);
                 log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-                continue;
+                continue; // Ignora
             }
 
+            // Cerca il tipo di soccorritore nell'array dei tipi disponibili
             rescuer_type_t *found_rt = find_rescuer_type_in_array_pet(rt_name_buf, config);
-            if (!found_rt) {
-                sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Tipo soccorritore '%s' non trovato. Richiesta ignorata.", line_num_pass2, name_buffer, rt_name_buf);
+            if (!found_rt) { // Se il tipo non esiste
+                sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Tipo soccorritore '%s' non trovato nella configurazione dei soccorritori. Richiesta ignorata.", line_num_pass2, name_buffer, rt_name_buf);
                 log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-                continue;
+                continue; // Ignora
             }
 
+            // Se l'array `requests_arr` è pieno, rialloca per più spazio
             if (actual_req_count >= req_array_capacity) {
-                req_array_capacity *= 2;
+                req_array_capacity *= 2; // Raddoppia la capacità
                 rescuer_request_t *temp_req_arr = realloc(requests_arr, req_array_capacity * sizeof(rescuer_request_t));
-                if (!temp_req_arr) {
-                    sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Fallimento riallocazione richieste soccorritori: %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
+                if (!temp_req_arr) { // Se realloc fallisce
+                    sprintf(log_msg_buffer, "Riga %d, Emergenza '%s': Fallimento riallocazione memoria per richieste soccorritori: %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
                     log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
                     free(requests_arr); // Libera l'array parzialmente popolato
-                    goto error_cleanup_pet_fatal;
+                    goto error_cleanup_pet_fatal; // Errore fatale
                 }
-                requests_arr = temp_req_arr;
+                requests_arr = temp_req_arr; // Aggiorna il puntatore all'array riallocato
             }
-            requests_arr[actual_req_count].type = found_rt;
+            // Popola la struttura rescuer_request_t
+            requests_arr[actual_req_count].type = found_rt; // Puntatore al tipo di soccorritore trovato
             requests_arr[actual_req_count].required_count = num_needed_val;
             requests_arr[actual_req_count].time_to_manage = time_needed_val;
-            actual_req_count++;
-        }
+            actual_req_count++; // Incrementa il contatore delle richieste valide per questa emergenza
+        } // Fine loop strtok_r per le richieste di soccorritori
 
-        if (actual_req_count == 0) { // Se nessuna richiesta valida è stata parsata dalla stringa rescuers
-            sprintf(log_msg_buffer, "Riga %d: Nessuna richiesta soccorritore valida trovata per emergenza '%s' da stringa '%s'. Riga ignorata.", line_num_pass2, name_buffer, rescuers_full_str);
+        // Se, dopo aver processato la stringa dei soccorritori, non ne abbiamo trovata nessuna valida,
+        // l'intera riga del tipo di emergenza viene considerata non valida.
+
+        if (actual_req_count == 0) {
+            sprintf(log_msg_buffer, "Riga %d: Nessuna richiesta soccorritore valida trovata per emergenza '%s' dalla stringa '%s'. Riga ignorata.", line_num_pass2, name_buffer, rescuers_full_str);
             log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-            free(requests_arr); // requests_arr era stato allocato
-            continue; // Ignora questa emergenza
+            free(requests_arr); // `requests_arr` era stato allocato, quindi va liberato
+            continue; // Passa alla prossima riga del file
         }
         
+        // --- Fine Parsing Stringa Soccorritori ---
+
+        // Se tutto è andato bene finora, popola la struttura emergency_type_t
         emergency_type_t *current_et_ptr = &config->emergency_types_array[current_type_idx];
-        current_et_ptr->emergency_desc = strdup(name_buffer);
-        if (!current_et_ptr->emergency_desc) {
+
+        current_et_ptr->emergency_desc = strdup(name_buffer); // Alloca memoria e copia il nome dell'emergenza
+        if (!current_et_ptr->emergency_desc) { // Se strdup fallisce
             sprintf(log_msg_buffer, "Riga %d: Fallimento allocazione memoria per nome emergenza '%s': %s. Parsing interrotto.", line_num_pass2, name_buffer, strerror(errno));
             log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-            free(requests_arr); // Libera l'array di richieste per questa emergenza
-            goto error_cleanup_pet_fatal;
+            free(requests_arr); // Libera l'array di richieste per questa emergenza che non verrà aggiunta
+            goto error_cleanup_pet_fatal; // Errore fatale
         }
         current_et_ptr->priority = priority_val;
-        current_et_ptr->rescuers = requests_arr;
-        current_et_ptr->rescuers_req_number = actual_req_count;
+        current_et_ptr->rescuers = requests_arr; // Assegna l'array di richieste (già allocato e popolato)
+        current_et_ptr->rescuers_req_number = actual_req_count; // Numero di richieste valide
 
+        // Log del tipo di emergenza estratto con successo
         sprintf(log_msg_buffer, "Riga %d: Estratta emergenza: Nome='%s', Priorità=%hd, N.Richieste Socc.=%d",
-                line_num_pass2, current_et_ptr->emergency_desc, current_et_ptr->priority, current_et_ptr->rescuers_req_number);
+            line_num_pass2, current_et_ptr->emergency_desc, current_et_ptr->priority, current_et_ptr->rescuers_req_number);
+    log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
+    // Log dettagliato di ogni richiesta per questa emergenza (opzionale ma utile)
+    for(int k=0; k < actual_req_count; ++k) {
+        sprintf(log_msg_buffer, "    Richiesta %d: TipoSocc='%s', NumRichiesti=%d, TempoGestione=%d sec", k+1, requests_arr[k].type->rescuer_type_name, requests_arr[k].required_count, requests_arr[k].time_to_manage);
         log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-        for(int k=0; k < actual_req_count; ++k) {
-            sprintf(log_msg_buffer, "    Richiesta %d: Tipo='%s', Num=%d, Tempo=%d", k+1, requests_arr[k].type->rescuer_type_name, requests_arr[k].required_count, requests_arr[k].time_to_manage);
-            log_message(LOG_EVENT_FILE_PARSING, filename, log_msg_buffer);
-        }
+    }
         
-        current_type_idx++;
-        continue;
+        current_type_idx++; // Incrementa l'indice per il prossimo tipo di emergenza valido
+        continue; // Passa alla prossima riga del file
 
     format_error_pet:
         sprintf(log_msg_buffer, "Riga %d: Errore formato: '%s'. Riga ignorata.", line_num_pass2, original_line_for_log);
@@ -284,3 +647,6 @@ error_cleanup_pet_fatal: // Usato per errori di allocazione fatali che interromp
     if(file) fclose(file);
     return false;
 }
+
+*/
+

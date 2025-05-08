@@ -95,7 +95,7 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
     //nel caso non venga trovato nessun tipo
     if(type_count == 0){
         log_message(LOG_EVENT_FILE_PARSING, nome_file, "Nessun tipo di soccorritore trovato");
-        config->rescuer_type_num;
+        config->rescuer_type_num = 0;
         config->rescuers_type_array = NULL;
         config->total_digital_twin_da_creare = 0;
         fclose(file);
@@ -124,7 +124,7 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
     rewind(file);
     int riga_num_pass2 = 0;
     int indice_tipo = 0;
-    //lo utilizzo come controllo ridondante
+    //lo utilizzo come controllo ridondante se non ho superato type count
 
 
     log_message(LOG_EVENT_FILE_PARSING, nome_file, "Secondo passsaggio: Estraggo dati");
