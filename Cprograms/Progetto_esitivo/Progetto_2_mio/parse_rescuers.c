@@ -49,7 +49,8 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
 
     FILE* file;
-    LOG_SNCALL(file, fopen(nome_file, "r"), (log_msg_buffer, "Errore fopen su '%s': %s", nome_file, strerror(errno)), LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+    sprintf(log_msg_buffer, "Errore fopen apertura file '%s': %s", nome_file, strerror(errno));
+    LOG_SNCALL(file, fopen(nome_file, "r"), LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
 
     log_message(LOG_EVENT_FILE_PARSING, nome_file, "File aperto con successo");
 
@@ -70,7 +71,7 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
         rimuovi_spazi(riga_copia);
 
         if(strlen(riga_copia) == 0){
-            sprintf(log_message, "Riga %d vuota, ignoro", riga_num_pass1);
+            sprintf(log_msg_buffer, "Riga %d vuota, ignoro", riga_num_pass1);
             log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
             continue;
         }
@@ -142,7 +143,7 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
         rimuovi_spazi(riga);
 
         if(strlen(riga) == 0){
-            sprintf(log_message, "Riga %d vuota, ignoro", riga_num_pass1++);
+            sprintf(log_msg_buffer, "Riga %d vuota, ignoro", riga_num_pass1++);
             log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
             continue;
         }
@@ -171,7 +172,7 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
             continue;
         }
         
-        rescuer_type_t *current = &config->emergency_types_array[indice_tipo];
+        rescuer_type_t *current = &config->rescuers_type_array[indice_tipo];
         //current ora punta al primo elemento dell'array dei tipi
 
         current->rescuer_type_name = (char*)malloc(strlen(nome) + 1);
@@ -184,15 +185,16 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
             log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
 
             for(int i = 0; i<indice_tipo; i++){
-                //siccome è allocata va liberata
-                free(config->rescuers_type_array[i].rescuer_type_name);
-                free(config->rescuers_type_array);
-                config->rescuers_type_array = NULL; //voglio uscire con array NULL
-                config->rescuer_type_num = 0;
-                fclose(file);
-                return false;
-                //faccio tutte le pulizie che posso
+                if(config->rescuers_type_array[i].rescuer_type_name){
+                    free(config->rescuers_type_array[i].rescuer_type_name);
+                }
             }
+
+            free(config->rescuers_type_array); 
+            config->rescuers_type_array = NULL;
+            config->rescuer_type_num = 0;
+            fclose(file);
+            return false;
         }
         //in teoria non possono esserci altri errori quindi assegno valore
         current->speed = speed;
@@ -206,11 +208,11 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
         indice_tipo++;
     }
 
-    config->emergency_type_num = indice_tipo;   //se tutto bene è il numero di cicli
+    config->rescuer_type_num = indice_tipo;   //se tutto bene è il numero di cicli
     fclose(file);
 
     //controllo in +, tutte le righe erano formattate male
-    if(config->rescuer_type_num == 0 && indice_tipo > 0){
+    if(config->rescuer_type_num == 0 && type_count > 0){
         sprintf(log_msg_buffer, "Trovate %d righe potenziali ma nessuna convalidata", type_count);
         log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
         free(config->rescuers_type_array); //non devo liberare nomi tanto non ne ho allocati
@@ -219,7 +221,67 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
     }
 
     //se sono qui tutto è andato bene
-    sprintf(log_msg_buffer, "Parsing dei soccorritori completato. Letti %d tipi di soccorritori, vanno creati totali %d gemelli virtuali", config->emergency_type_num, config->total_digital_twin_da_creare);
+    sprintf(log_msg_buffer, "Parsing dei soccorritori completato. Letti %d tipi di soccorritori, vanno creati totali %d gemelli virtuali", config->rescuer_type_num, config->total_digital_twin_da_creare);
     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
     return true;
+}
+
+
+
+//metto qui free_system_config
+
+void free_system_config(system_config_t* config){
+    char log_msg_buffer[200];
+
+    if(!config){
+        return; //non libero nulla se è gia NULL
+    }
+
+    log_message(LOG_EVENT_GENERAL_INFO, "System_config", "Inizio deallocazione system_config");
+
+
+    //prima libero soccorritori
+    if(config->rescuers_type_array){
+        for(int i = 0; i<config->rescuer_type_num; i++){
+            if(config->rescuers_type_array[i].rescuer_type_name){
+                free(config->rescuers_type_array[i].rescuer_type_name);
+                config->rescuers_type_array[i].rescuer_type_name = NULL;
+            }
+        }
+
+        free(config->rescuers_type_array);
+        config->rescuers_type_array = NULL;
+
+        sprintf(log_msg_buffer, "Deallogati %d tipi di soccorritori", config->rescuer_type_num);
+        log_message(LOG_EVENT_GENERAL_INFO, "System_config", log_msg_buffer);
+        config->rescuer_type_num = 0;
+    }
+
+
+    //poi libero emergenze
+    if(config->emergency_types_array){
+        for(int i = 0; i<config->emergency_type_num; i++){
+            if(config->emergency_types_array[i].emergency_desc){
+                free(config->emergency_types_array[i].emergency_desc);
+            }
+            config->emergency_types_array[i].emergency_desc = NULL;
+
+
+            if(config->emergency_types_array[i].rescuers){
+                free(config->emergency_types_array[i].rescuers);
+                config->emergency_types_array[i].rescuers = NULL;
+            }
+            config->emergency_types_array[i].rescuer_required_number = 0;
+        }
+        free(config->emergency_types_array);
+        config->emergency_types_array = NULL;
+
+        sprintf(log_msg_buffer, "Deallogati %d tipi di emergenze", config->emergency_type_num);
+        log_message(LOG_EVENT_GENERAL_INFO, "System_config", log_msg_buffer);    
+        config->emergency_type_num = 0;
+    }
+
+
+    config->total_digital_twin_da_creare = 0;
+    log_message(LOG_EVENT_GENERAL_INFO, "System_config", "Deallogazione system_config finita");
 }

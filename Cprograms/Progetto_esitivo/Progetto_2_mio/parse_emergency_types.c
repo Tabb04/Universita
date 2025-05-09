@@ -63,7 +63,7 @@ static rescuer_type_t* trova_soccorritore(const char* name, const system_config_
     //qui presuppongo siano già stati parsati i soccorritori ovviamente
     for(int i = 0; i<config->rescuer_type_num; i++){
         if(strcmp(config->rescuers_type_array[i].rescuer_type_name, name) == 0){
-            return &config->emergency_types_array[i];
+            return &config->rescuers_type_array[i];
             //restituisco putnatore a quella struttura
         }
     }
@@ -92,8 +92,9 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
 
     FILE* file;
-    LOG_SNCALL(file, fopen(nome_file, "r"), (log_msg_buffer, "Errore fopen su '%s': %s", nome_file, strerror(errno)), LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
-
+    sprintf(log_msg_buffer, "Errore fopen apertura file '%s': %s", nome_file, strerror(errno));
+    LOG_SNCALL(file, fopen(nome_file, "r"), LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+    
     log_message(LOG_EVENT_FILE_PARSING, nome_file, "File aperto con successo");
 
     //variabili primo ciclo
@@ -110,13 +111,13 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
         
         //anche qui per sicurezza copio riga perchè modifico in place
         char riga_copia[LINE_LENGTH];
-        strncpy(riga_num_pass1, riga, LINE_LENGTH - 1);
+        strncpy(riga_copia, riga, LINE_LENGTH - 1);
         riga[LINE_LENGTH - 1] = '\0';
         riga_copia[strcspn(riga_copia, "\n")] = 0; //tolgo \n
         rimuovi_spazi(riga_copia);
 
         if(strlen(riga_copia) == 0){
-            sprintf(log_message, "Riga %d vuota, ignoro", riga_num_pass1);
+            sprintf(log_msg_buffer, "Riga %d vuota, ignoro", riga_num_pass1);
             log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
             continue;
         }
@@ -139,7 +140,7 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
         return true;    //anche qui considero file vuoto come potenzialmente corretto
     }
     
-    config->emergency_types_array = (emergency_type_t*)malloc(type_count * sizeof(emergency_t));
+    config->emergency_types_array = (emergency_type_t*)malloc(type_count * sizeof(emergency_type_t));
 
     if(!config->emergency_types_array){
         //malloc non è syscall quindi gestisco nello stesso modo di parse_rescuers
@@ -177,7 +178,7 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
 
         char* riga_ptr = rimuovi_spazi_ptr(riga_copia_parsing);
         if(strlen(riga_ptr) == 0){
-            sprintf(log_message, "Riga %d vuota, ignoro", riga_num_pass1);
+            sprintf(log_msg_buffer, "Riga %d vuota, ignoro", riga_num_pass1);
             log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
             continue;
         }
@@ -301,31 +302,33 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
             config->emergency_type_num = 0;
             return false;
         }
-        int actual_req_count = 0;   //salvo quanti campi effettivamente ho, probabile non 5
+        int req_count_vero = 0;   //salvo quanti campi effettivamente ho, probabile non 5
 
         //creo due variabili per navigare quando faccio strtok_r
         char* current_rescuer_token;    //punta al token corrente
-        char *rest_of_rescuers_str = riga_intera_soccorritori; //lavoro su copia perchè modifico
-        char *saveptr_token; //puntatore stato interno di strtok_r
+        char *riga_soccorritori_resto = riga_intera_soccorritori; //lavoro su copia perchè modifico
+        char *token_dopo; //puntatore stato interno di strtok_r
 
         //tokenizzo utilizzando ; come separatore
         //ES. Pompieri:2,10;Ambulanza:1,5;Polizia:1,3 
 
-        while(current_rescuer_token = strtok_r(rest_of_rescuers_str, ";", &saveptr_token) != NULL){
+        while((current_rescuer_token = strtok_r(riga_soccorritori_resto, ";", &token_dopo)) != NULL){
             
-            //current_rescuer_token punta alla P di pompieri
-            //saveptr_token punta a A di ambulanza
-            rest_of_rescuers_str = NULL; //per chiamate dopo strtok_r, continua da dove era prima
+            //current_rescuer_token punta alla P di pompieri e finisce con \0
+            //token_dopo punta a A di ambulanza
+            riga_soccorritori_resto = NULL; //per chiamate dopo strtok_r, continua da dove era prima
             
+
             //uso stringa di supporto
-            char token_copy_for_trim[LINE_LENGTH];
-            strncpy(token_copy_for_trim, current_rescuer_token, LINE_LENGTH -1);
-            token_copy_for_trim[LINE_LENGTH - 1] = '\0';
+            char token_copia_da_pulire[LINE_LENGTH];
+            strncpy(token_copia_da_pulire, current_rescuer_token, LINE_LENGTH -1);
+            ///ora toke_copy_for_trim contiene Pompieri:2,10
+            token_copia_da_pulire[LINE_LENGTH - 1] = '\0';
 
             //poi un puntatore perchè uso la funzione di pulizia 2
-            char* trimmed_token = rimuovi_spazi_ptr(token_copy_for_trim);
+            char* token_pulito = rimuovi_spazi_ptr(token_copia_da_pulire);
 
-            if(strlen(trimmed_token) == 0){
+            if(strlen(token_pulito) == 0){
                 continue;
             }
 
@@ -333,8 +336,8 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
             char rt_name_buf[RESCUER_NAME_LENGTH];
             int num_needed_val, time_needed_val;
 
-            if(sscanf(trimmed_token, "%[^:]:%d,%d", rt_name_buf, &num_needed_val, &time_needed_val) != 3){
-                sprintf(log_msg_buffer, "Errore riga %d, formato richiesta soccorritore non valido '%s'", riga_num_pass2, trimmed_token);
+            if(sscanf(token_pulito, "%[^:]:%d,%d", rt_name_buf, &num_needed_val, &time_needed_val) != 3){
+                sprintf(log_msg_buffer, "Errore riga %d, formato richiesta soccorritore non valido '%s'", riga_num_pass2, token_pulito);
                 log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
                 continue;
             }
@@ -351,10 +354,10 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
                 continue;               
             }
 
-            if(actual_req_count >= req_array_cap){
+            if(req_count_vero >= req_array_cap){
                 req_array_cap *=2;
-                rescuer_request_t* temp_req_array = realloc(request_arr, req_array_cap * sizeof(rescuer_request_t));
-                if(!temp_req_array){
+                rescuer_request_t* request_array_temp = realloc(request_arr, req_array_cap * sizeof(rescuer_request_t));
+                if(!request_array_temp){
                     sprintf(log_msg_buffer, "Errore riallocazione memoria per '%s': %s", nome_temp1, strerror(errno));
                     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
                     
@@ -368,16 +371,83 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
                     config->emergency_types_array = NULL; config->emergency_type_num = 0;
                     return false;
                 }
-                request_arr = temp_req_array;
+                request_arr = request_array_temp;
             }
-            request_arr[actual_req_count].type = found;
-            request_arr[actual_req_count].required_count = num_needed_val;
-            request_arr[actual_req_count].time_to_manage = time_needed_val;
-            actual_req_count++;
+            request_arr[req_count_vero].type = found;
+            request_arr[req_count_vero].required_count = num_needed_val;
+            request_arr[req_count_vero].time_to_manage = time_needed_val;
+            req_count_vero++;
         }
 
+        if(req_count_vero == 0){
+            sprintf(log_msg_buffer, "Errore, nessuna richiesta di soccorritore valida trovata per emergenza '%s'", riga_intera_soccorritori);
+            log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+            free(request_arr);
+            continue;
+        }
+
+        //faccio struttura emergency_type_t
+        emergency_type_t *emergency_types_ptr = &config->emergency_types_array[indice_emergenza];
         
+        //nome va assegnato dinamicamente in teoria
+        emergency_types_ptr->emergency_desc = (char*)malloc(strlen((nome_temp1) + 1));
+        if(!emergency_types_ptr->emergency_desc){
+            sprintf(log_msg_buffer, "Errore, fallimento allocazione memoria per emergenza '%s'", nome_temp1);
+            log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+            free(request_arr);
+            for(int i = 0; i < indice_emergenza; ++i) {
+                if(config->emergency_types_array[i].emergency_desc) {
+                    free(config->emergency_types_array[i].emergency_desc);
+                }
+                if(config->emergency_types_array[i].rescuers) {
+                    free(config->emergency_types_array[i].rescuers);
+                }
+            }   
+            if(config->emergency_types_array) free(config->emergency_types_array);
+            config->emergency_types_array = NULL;
+            config->emergency_type_num = 0;
+            fclose(file);
+            return false;
+        }
+        strcpy(emergency_types_ptr->emergency_desc, nome_temp1);
+        
+        //finisco di caricare tutti i dati
+        emergency_types_ptr->priority = prior_temp1;
+        emergency_types_ptr->rescuers = request_arr;
+        emergency_types_ptr->rescuer_required_number = req_count_vero;
 
+        //faccio logging dei valori caricati
+        sprintf(log_msg_buffer, "Caricata riga n* %d: Nome=%s, Priorità=%hd, Soccorsi richiesti=%d", riga_num_pass2, emergency_types_ptr->emergency_desc, emergency_types_ptr->priority, emergency_types_ptr->rescuer_required_number);
+        log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
 
+        //stampo anche ogni Tipo di soccorso richiesto
+        for(int i=0; i<emergency_types_ptr->rescuer_required_number; i++){
+            sprintf(log_msg_buffer, "Soccorso=%s, Numero unità=%d, Tempo di gestine=%d", request_arr[i].type->rescuer_type_name, request_arr[i].required_count, request_arr[i].time_to_manage);
+            log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+        }
+        indice_emergenza++;
+        continue;
     }
+
+    //ora posso dire quanti tipi di emergenza ho
+    config->emergency_type_num = indice_emergenza;
+
+    fclose(file);
+
+    //come in rescuers se avevo almeno un candidato ma nessuno era valido considero fallimento
+    if((config->emergency_type_num == 0) && (type_count > 0)){
+        sprintf(log_msg_buffer, "Nessuna emergenza valida estratta da %d potenziali", type_count);
+        log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+        
+        //pulisco perchè l'array era stato allocato
+        if(config->emergency_types_array){
+            free(config->emergency_types_array);
+        }
+        config->emergency_types_array = NULL;
+        return false;
+    }
+
+    sprintf(log_msg_buffer, "Completato parsing. Letti %d emergenze valide", config->emergency_type_num);
+    log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
+    return true;
 }

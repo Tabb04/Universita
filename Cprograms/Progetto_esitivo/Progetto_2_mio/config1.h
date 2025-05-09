@@ -1,5 +1,5 @@
 #ifndef CONFIG_H
-#define CONFIG_G
+#define CONFIG_H
 
 #define EMERGENCY_NAME_LENGTH 64
 #define RESCUER_NAME_LENGTH 64

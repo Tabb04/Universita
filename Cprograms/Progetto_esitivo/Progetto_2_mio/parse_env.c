@@ -9,7 +9,6 @@
 #include<Syscalls_3_progetto.h>
 #include<errno.h>
 #include<logger.h>
-#include <logger.c>
 
 //Ho provato ad implementare un controllo su spazi e tab aggiunti + righe vuote
 //funzione principale è booleana in modo tale da poter gestire altrove eventuale errore
@@ -49,13 +48,9 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
     }
 
     FILE* file;
+    sprintf(log_msg_buffer, "Errore fopen apertura file '%s': %s", nome_file, strerror(errno));
+    LOG_SNCALL(file, fopen(nome_file, "r"), LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
     
-    //utilizzo una macro personalizzata che fa il lavoro di riconoscere l'errore, scriverlo sul buffer
-    //fare log_message del buffer e ritornare false
-    //per stampare più argomenti devo strettamente utilizzare una parentesi tonda
-    //per delimitare gli argomenti di sprintf
-
-    LOG_SNCALL(file, fopen(nome_file, "r"), (log_msg_buffer, "Fallimento apertura file '%s': %s", nome_file, strerror(errno)), LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
 
     log_message(LOG_EVENT_FILE_PARSING, nome_file, "File aperto con successo");
 
@@ -68,7 +63,7 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
 
     env_config->queue_name[0] = "\0";
     env_config->grid_height = -1;
-    env_config->grid_height = -1;
+    env_config->grid_width = -1;
     //inizializzo tutto
     
     while(fgets(riga, sizeof(riga), file)){
@@ -99,7 +94,7 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
             if(strcmp(nome, "queue") == 0){
                 //presuppongo che lo / lo metto io da nome dato
                 //quindi non ne devo avere altri
-                if((strlen(nome) >= LINE_LENGTH) || strchr(nome, '/')){
+                if((strlen(valore) >= sizeof(env_config->queue_name)) || (strchr(valore, '/'))  ){
                     sprintf(log_msg_buffer, "Errore riga %d, nome troppo lungo o contentente carattere '\'", num_riga);
                     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
                 }else{
@@ -118,7 +113,7 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
                     return false;
                 }else{
                     height_trovata = true;
-                    sprintf(log_msg_buffer, "Altezza trovata a riga %d: '%s'", num_riga, env_config->grid_height);
+                    sprintf(log_msg_buffer, "Altezza trovata a riga %d: '%d'", num_riga, env_config->grid_height);
                     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
                 }
             }else if(strcmp(nome, "width") == 0){
@@ -129,7 +124,7 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
                     return false;
                 }else{
                     width_trovata = true;
-                    sprintf(log_msg_buffer, "Ampiezza trovata a riga %d: '%s'", num_riga, env_config->grid_width);
+                    sprintf(log_msg_buffer, "Ampiezza trovata a riga %d: '%d'", num_riga, env_config->grid_width);
                     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
                 }
             }else{

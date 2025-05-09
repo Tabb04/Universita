@@ -87,7 +87,7 @@
 //Non so come fare a passare alla macro più parametri
 //tipo sopra dove ho "Fallimento apertura file %s: %s, filename, sterror(errno)"
 //se utilizzo macro al momento potrei solo utilizzare un parametro
-#define LOG_SCALL(val, fun, sprintf_args, event_type, id, msg_or_buf)\
+#define LOG_SCALL1(val, fun, sprintf_args, event_type, id, msg_or_buf)\
     do{\
         if((val = fun) == -1){\
             sprintf sprintf_args;\
@@ -96,7 +96,7 @@
         }\
     }while(0)\
 
-#define LOG_SNCALL(val, fun, sprintf_args, event_type, id, msg_or_buf)\
+#define LOG_SNCALL1(val, fun, sprintf_args, event_type, id, msg_or_buf)\
     do{\
         if((val = fun) == NULL){\
             sprintf sprintf_args;\
@@ -105,4 +105,30 @@
         }\
     }while(0)\
 
-#endif // ERROR_HANDLING_H
+
+
+//prima passavo i parametri con cui fare sprintf ma giustamente posso prima scrivere nel
+//log_msg_buffer e poi eventualmente stampare 
+//qui migliore 
+
+#define LOG_SCALL(val, fun, event_type, id, formatted_msg_buffer) \
+    do{\
+        if((val = fun) == -1){\
+            log_message(event_type, id, formatted_msg_buffer);\
+            return false;\
+        }\
+    } while(0)
+
+#define LOG_SNCALL(val, fun, event_type, id, formatted_msg_buffer)\
+    do{\
+        if((val = fun) == NULL){\
+            log_message(event_type, id, formatted_msg_buffer);\
+            return false;\
+        }\
+    }while(0)
+
+
+    //non metto perror tanto è sul file log
+
+
+#endif

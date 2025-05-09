@@ -45,6 +45,6 @@ bool parse_emergency_types(const char *filename, system_config_t *config);
  *
  * @param config Puntatore alla configurazione da liberare.
  */
-void free_system_config(system_config_t *config);
+void free_system_config(system_config_t *config);   //messa in parse_rescuers
 
 #endif

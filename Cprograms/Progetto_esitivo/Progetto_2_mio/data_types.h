@@ -14,7 +14,7 @@ typedef enum{
 
 
 typedef struct{
-    char * rescuer_type_name; //allocato dinamicamente?
+    char * rescuer_type_name; //allocato dinamicamente
     int speed;
     int x;
     int y;

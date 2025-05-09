@@ -23,7 +23,7 @@ const char* log_event_type_to_string(log_event_type_t event_type){
 
 bool init_logger(const char* log_filename){
     if(log_file != NULL){
-        perror("File già inizializzato");
+        log_message(LOG_EVENT_GENERAL_ERROR, "SYSTEM", "Tentativo di inizializzare logger già attivo");
         return false;
     }
 

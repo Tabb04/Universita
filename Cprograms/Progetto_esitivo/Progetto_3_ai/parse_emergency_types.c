@@ -260,7 +260,7 @@ bool parse_emergency_types(const char *filename, system_config_t *config) {
         // strtok_r modifica la stringa, quindi passiamo rescuers_full_str che è una copia
         char *rest_of_rescuers_str = rescuers_full_str; 
         char *saveptr_token;
-        
+
         while ((current_rescuer_token = strtok_r(rest_of_rescuers_str, ";", &saveptr_token)) != NULL) {
             rest_of_rescuers_str = NULL; // Per le chiamate successive a strtok_r
             
@@ -311,7 +311,7 @@ bool parse_emergency_types(const char *filename, system_config_t *config) {
                     if(config->emergency_types_array) free(config->emergency_types_array);
                     config->emergency_types_array = NULL; config->num_emergency_types = 0;
                     return false;
-                }
+                }   
                 requests_arr = temp_req_arr;
             }
             requests_arr[actual_req_count].type = found_rt;
