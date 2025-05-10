@@ -219,7 +219,7 @@ int main(int argc, char *argv[]) {
     global_system_config.emergency_type_num = 0;
     global_system_config.total_digital_twin_da_creare = 0;
 
-
+    
     // 2. Parsing della Configurazione
     log_message(LOG_EVENT_GENERAL_INFO, "MAIN", "Inizio parsing configurazione ambiente (env.conf)...");
     if (!parse_environment("env.conf", &global_system_config.config_env)) {
@@ -364,7 +364,7 @@ int main(int argc, char *argv[]) {
     // mq_unlink(mq_name_with_slash); // Attenzione: questo è aggressivo. Fallisce silenziosamente se non esiste.
 
     global_mq_descriptor = mq_open(mq_name_with_slash, O_CREAT | O_RDONLY | O_EXCL, 0660, &attributes);
-    if (global_mq_descriptor == (mqd_t)-1) {
+    if (global_mq_descriptor == (mqd_t)-1) {    
         if (errno == EEXIST) { // La coda esiste già, proviamo ad aprirla senza O_CREAT | O_EXCL
             log_message(LOG_EVENT_MESSAGE_QUEUE, "SYSTEM", "Coda messaggi già esistente, tentativo di riapertura...");
             global_mq_descriptor = mq_open(mq_name_with_slash, O_RDONLY);
@@ -390,7 +390,7 @@ int main(int argc, char *argv[]) {
     log_message(LOG_EVENT_GENERAL_INFO, "MAIN", "Thread listener coda messaggi creato con successo.");
 
      // --- QUI INIZIERANNO I THREAD GESTORI EMERGENZE E IL CICLO PRINCIPALE DI SUPERVISIONE ---
-     log_message(LOG_EVENT_GENERAL_INFO, "MAIN", "Inizializzazione completata. Il sistema è operativo.");
+    log_message(LOG_EVENT_GENERAL_INFO, "MAIN", "Inizializzazione completata. Il sistema è operativo.");
     
      // Esempio di ciclo di attesa per la terminazione (es. tramite CTRL+C o comando)
      // Per ora, facciamo un semplice join del thread listener.

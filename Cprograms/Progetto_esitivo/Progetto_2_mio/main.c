@@ -41,15 +41,15 @@ cnd_t cond_nuova_emergenza;     //per segnalare se arriva una nuova emergenza
 volatile bool shutdown_flag = false;    //se true termino il thread
 
 //descrittore coda
-mqd_t global_mq_desc = (mqd_t)-1;   //inizializzazione a valore non valido secondo
+mqd_t mq_desc_globale = (mqd_t)-1;   //inizializzazione a valore non valido secondo
 
 
 void pulizia_e_uscita(bool config_loaded, bool digital_twins_loaded, bool mq_loaded, bool sync_loaded){
     
     log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Inizio pulizia");
     
-    if(mq_loaded && (global_mq_desc != (mqd_t)-1)){
-        mq_close(global_mq_desc);
+    if(mq_loaded && (mq_desc_globale != (mqd_t)-1)){
+        mq_close(mq_desc_globale);
         log_message(LOG_EVENT_MESSAGE_QUEUE, "Cleanup", "Coda messaggi chiusa");
     }
 
@@ -84,7 +84,7 @@ int message_queue_ascoltatore_func(){
 
     while(!shutdown_flag){
         //attendo messaggio sulla coda
-        ssize_t byte_letti = mq_receive(global_mq_desc, (char*)&richiesta_ricevuta, sizeof(emergency_request_t), &priority);
+        ssize_t byte_letti = mq_receive(mq_desc_globale, (char*)&richiesta_ricevuta, sizeof(emergency_request_t), &priority);
         //uso tipatura a (char*) perchè il prototipo di mq_recive dice "char *msg_ptr" come secondo parametro
         
         if(shutdown_flag){  //controllo appena svegliato
@@ -188,6 +188,7 @@ int main(int argc, char* argv[]){
     bool config_fully_loaded = false;
     bool digital_twins_inizializzati = false;   
     bool message_queue_open = false;
+    bool sync_inizializzate = false;
 
 
     global_system_config.rescuers_type_array = NULL;
@@ -288,7 +289,7 @@ int main(int argc, char* argv[]){
         if(total_digital_twins_creati != global_system_config.total_digital_twin_da_creare){
             sprintf(log_msg_buffer, "Discrepanza tra gemelli da creare %d e gemelli creati %d", global_system_config.total_digital_twin_da_creare, total_digital_twins_creati);
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-            cleanup_before_exit(config_fully_loaded, digital_twins_inizializzati);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate);
             return EXIT_FAILURE;
         }
 
@@ -299,11 +300,99 @@ int main(int argc, char* argv[]){
         log_message(LOG_EVENT_GENERAL_INFO, "Main", "Nessun gemello creato come descritto da file");
     }
 
-    //inizializzazione coda
+
+    //inizializzo sistemi di sincronizzazione
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Inizializzazione sistemi di sincronizzazione");
+    
+    //allora qui dovrei proteggere la sem_init con una SCALL anche se abbastanza esagerato
+    //perchè nelle SCALL a lezione avevo 3 parametri
+    //mentre qui avrei valore di ritorno, funzione, il tipo di evento, l'id per logger
+    //+ messaggio per il logger, argomento 1 per pulizia e uscito, argomento 2, argomento 3, argomento 4
+    //con un totale di 9 argomenti abbastanza poco pratico
+    //comunque faccio provo ad implementarlo
+    //se riesco faccio un #ifdef MACRO_VERSION in cui utilizzo le due versioni differenti
+    
+
+    int thrd_ret;
+    sprintf(log_msg_buffer, "Fallita inizializzazione del mutex per coda emergenze");
+    LOG_SCALL_THRDSC(thrd_ret, mtx_init(&mutex_emergenze_attesa, mtx_plain), LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer, config_fully_loaded, digital_twins_inizializzati, message_queue_open, false);
+    //questa macro dunque ma tmx_init, guarda se non è thrd_success e nel caso stampa il log_msg_buffer, pulisce e fa EXIT_FAILURE
+
+    //in questo punto dovrei fare la stessa cosa con cnd_init ma il problema è che non posso
+    //chiamare la funzione pulizia_e_uscita per questa con sync_loaded = true
+    //visto che proverebbe a distruggerere una cond var non inizializzata
+    //dovrei fare un altra macro ma ritengo 9 parametri già troppi
+
+    if(cnd_init(&cond_nuova_emergenza) != thrd_success){
+        log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Fallita inizializzazione di cond var per coda di emergenze");
+        mtx_destroy(&mutex_emergenze_attesa);
+        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, false);
+        return EXIT_FAILURE;
+    }
+    sync_inizializzate = true;
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Sistemi di sincronizzazione inizializzati");
 
 
+
+    //adesso posso inizializzare la coda messaggi
+    struct mq_attr attributi;
+    attributi.mq_flags = 0;
+    attributi.mq_maxmsg = 10;   //poi eventualmente cambia
+    attributi.mq_msgsize = sizeof(emergency_request_t);
+    attributi.mq_curmsgs = 0;
+
+    sprintf(log_msg_buffer, "Apertura coda messaggi '/%s' in corso", global_system_config.config_env.queue_name);
+    log_message(LOG_EVENT_MESSAGE_QUEUE, "Message queue", log_msg_buffer);
+
+    char nome_mq_queue[LINE_LENGTH + 2];    //uno per / uno per \0
+    snprintf(nome_mq_queue, sizeof(nome_mq_queue), "/%s", global_system_config.config_env.queue_name);
+    
+    //anche qui potrei provare ad utilizzare una macro ma ho comportamenti diversi
+    //in base a se la coda è già inizializzata
+    mq_desc_globale = mq_open(nome_mq_queue, O_CREAT | O_RDONLY | O_EXCL, 0660, &attributi);
+    if(mq_desc_globale = (mqd_t)-1){
+        if(errno == EEXIST){    //coda esiste già
+            log_message(LOG_EVENT_MESSAGE_QUEUE, "Main", "Coda messaggi già esistente, apro");
+            mq_desc_globale = mq_open(nome_mq_queue, O_RDONLY);
+        }
+        if(mq_desc_globale = (mqd_t)-1){    //ha fallito di nuovo
+            sprintf(log_msg_buffer, "Fallimento apertura coda con nome %s: '%s'", nome_mq_queue, strerror(errno));
+            log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, false, sync_inizializzate);
+            return EXIT_FAILURE;
+        }
+    }
+    message_queue_open = true;
+    log_message(LOG_EVENT_MESSAGE_QUEUE, "Main", "Coda messaggi aperta");
+
+
+    //adesso posso creare il thread ascoltatore della coda messaggi
+    thrd_t id_thread_listener;
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Creazione thread ascoltatore delal coda messaggi");
+    if(thrd_create(&id_thread_listener, message_queue_ascoltatore_func, NULL) != thrd_success){
+        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate);
+        return EXIT_FAILURE;
+    }
+    
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Thread ascoltatore creato");
+
+
+    //tutta la logica qua
+
+
+
+    //aspetto terminazione del thread ascoltatore
+    int res_listener;   //intero
+    //anche qui potrei proteggere con macro
+    if(thrd_join(id_thread_listener, &res_listener) != thrd_success){
+        log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Fallimento di join thread ascoltatore");
+    }else{
+        sprintf(log_msg_buffer, "Thread ascoltatore terminato: '%d'", res_listener);
+        log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
+    }
+
+    //il logger viene chiuso in cleanup
+    printf("Sistema terminato correttamente\n");
     return EXIT_SUCCESS;
-
-
 }
 
