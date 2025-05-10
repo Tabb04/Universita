@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <pthread.h> // Per future implementazioni multithread
+#include <threads.h> // Per future implementazioni multithread
 #include <mqueue.h>  // Per code di messaggi POSIX
 #include <fcntl.h>   // Per O_flags in mq_open
 #include <sys/stat.h> // Per mode in mq_open
@@ -21,19 +21,158 @@
 system_config_t global_system_config;
 rescuer_digital_twin_t* global_digital_twins_array = NULL;
 int total_digital_twins_creati = 0;
+long next_emergency_id = 1; //Contatore id per le emergenze
 
 
-void pulizia_e_uscita(bool config_loaded, bool digital_twins_loaded){
+//utilizzo una struttura per le emergenze che usa liste linkate
+typedef struct nodo_emergenza{
+    emergency_t data;
+    struct nodo_emergenza *next;
+}emergency_node_t;
+
+//definisco dunque una testa e una coda
+emergency_node_t* lista_emergenze_attesa_testa = NULL;
+emergency_node_t* lista_emergenze_attesa_coda = NULL;
+
+mtx_t mutex_emergenze_attesa;   //lista va protetta tramite mutex
+cnd_t cond_nuova_emergenza;     //per segnalare se arriva una nuova emergenza
+
+//per terminazione controllata uso un flag
+volatile bool shutdown_flag = false;    //se true termino il thread
+
+//descrittore coda
+mqd_t global_mq_desc = (mqd_t)-1;   //inizializzazione a valore non valido secondo
+
+
+void pulizia_e_uscita(bool config_loaded, bool digital_twins_loaded, bool mq_loaded, bool sync_loaded){
+    
+    log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Inizio pulizia");
+    
+    if(mq_loaded && (global_mq_desc != (mqd_t)-1)){
+        mq_close(global_mq_desc);
+        log_message(LOG_EVENT_MESSAGE_QUEUE, "Cleanup", "Coda messaggi chiusa");
+    }
+
     if(digital_twins_loaded && global_digital_twins_array){
         free(global_digital_twins_array);
         global_digital_twins_array = NULL;
         log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Deallocato array gemelli digitali");
     }
+
     if(config_loaded){
         free_system_config(&global_system_config);
     }
+
+    if(sync_loaded){
+        mtx_destroy(&mutex_emergenze_attesa);
+        cnd_destroy(&cond_nuova_emergenza);
+        log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Distrutte mutexe cond_var");
+    }
+
+    log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Pulizia compleatata");
     close_logger();
 }
+
+
+//adesso la funzione che il thread in ascolto utilizzerà
+int message_queue_ascoltatore_func(){
+    emergency_request_t richiesta_ricevuta;
+    char log_msg_buffer[LINE_LENGTH + 250];
+    unsigned int priority;  //verrà usato da mq recive
+
+    log_message(LOG_EVENT_GENERAL_INFO, "Thread ascoltatore", "Thread ascoltatore avviato");
+
+    while(!shutdown_flag){
+        //attendo messaggio sulla coda
+        ssize_t byte_letti = mq_receive(global_mq_desc, (char*)&richiesta_ricevuta, sizeof(emergency_request_t), &priority);
+        //uso tipatura a (char*) perchè il prototipo di mq_recive dice "char *msg_ptr" come secondo parametro
+        
+        if(shutdown_flag){  //controllo appena svegliato
+            break;
+        }
+
+        if(byte_letti == -1){
+            sprintf(log_msg_buffer, "Errore in mq_receive: %s. Il thread in ascolto termina", strerror(errno));
+            log_message(LOG_EVENT_GENERAL_ERROR, "Thread ascoltatore", log_msg_buffer);
+            //potrei segnalare al thread errore fatale
+            break;
+        }
+        
+        if(byte_letti != sizeof(emergency_request_t)){
+            sprintf(log_msg_buffer, "Dimensione messaggio errata: %zd byte invece di %zd bytes", byte_letti, sizeof(emergency_request_t));
+            log_message(LOG_EVENT_GENERAL_ERROR, "Thread ascoltatore", log_msg_buffer);
+            continue;
+        }
+
+        //dovrei aver controllato tutto
+        sprintf(log_msg_buffer, "Ricevuta emergenza: Tipo=%s, Posizione=(%d, %d), Timestamp=%ld", richiesta_ricevuta.emergency_name, richiesta_ricevuta.x, richiesta_ricevuta.y, richiesta_ricevuta.timestamp);
+        log_message(LOG_EVENT_MESSAGE_QUEUE, "Nuova richiesta", log_msg_buffer);
+        
+
+        //metto a confrontare il tipo di emergenza tramite nome con quelli che ho
+        //RICoRDA emergency_desc sarebbe il nome
+        emergency_type_t* tipo_trovato = NULL;
+        for(int i = 0; i<global_system_config.emergency_type_num; i++){
+            if(strcmp(global_system_config.emergency_types_array[i].emergency_desc, richiesta_ricevuta.emergency_name) == 0){
+                tipo_trovato = &global_system_config.emergency_types_array[i];
+                break;
+            }
+        }
+
+        //controllo se il tipo di emergenza è tra quelli memorizzati
+        if(!tipo_trovato){
+            sprintf("Tipo di emergenza '%s' sconosciuto. Ignoro richiesta", richiesta_ricevuta.emergency_name);
+            log_message(LOG_EVENT_MESSAGE_QUEUE, "Richiesta invalida", log_msg_buffer);
+        }
+
+        //faccio tutti i controlli del caso        
+        if((richiesta_ricevuta.x >= global_system_config.config_env.grid_height) || (richiesta_ricevuta.x > 0) || (richiesta_ricevuta.y >= global_system_config.config_env.grid_width) || (richiesta_ricevuta.y > 0)){
+            sprintf(log_msg_buffer, "Coordinate di emergenza fuori dalla griglia per '%s'", richiesta_ricevuta.emergency_name);
+            log_message(LOG_EVENT_MESSAGE_QUEUE, "Richiesta invalida", log_msg_buffer);
+            continue;
+        }
+
+        //ora posso creare il nodo dell'emergenza
+        emergency_node_t* nodo_em = (emergency_node_t*)malloc(sizeof(emergency_node_t));
+        if(!nodo_em){
+            sprintf(log_msg_buffer, "Fallita allocazione memoria per emergenza: '%s'", strerror(errno));
+            log_message(LOG_EVENT_GENERAL_ERROR, "Thread ascoltatore", log_msg_buffer);
+            continue;
+        }
+
+        //inizializzo nodo
+        nodo_em->data.type = tipo_trovato;  //data è di tipo emergency_t
+        nodo_em->data.status = WAITING;
+        nodo_em->data.x = richiesta_ricevuta.x;
+        nodo_em->data.y = richiesta_ricevuta.y;
+        nodo_em->data.time = time(NULL);    //timestamp di ricezione
+        nodo_em->data.resquer_cont = 0;     //per ora non assegno nulla
+        nodo_em->data.rescuer_dt = NULL;    //stesso
+        nodo_em->next = NULL;               //devo vedere come è la coda
+        
+
+        //aggiungo nodo alla coda (con mutex)
+        mtx_lock(&mutex_emergenze_attesa);
+        if(lista_emergenze_attesa_coda == NULL){    //la lista è vuota
+            lista_emergenze_attesa_testa = nodo_em;
+            lista_emergenze_attesa_coda = nodo_em;
+        }else{
+            lista_emergenze_attesa_coda->next = nodo_em;
+            lista_emergenze_attesa_coda = nodo_em;
+        }
+
+        sprintf(log_msg_buffer, "Aggiunga nuova emergenza alla coda in WAITING. Tipo=%s, Posizione=(%d, %d)", nodo_em->data.type->emergency_desc, nodo_em->data.x, nodo_em->data.y);
+        log_message(LOG_EVENT_EMERGENCY_STATUS, "Coda attesa", log_msg_buffer);
+        
+        mtx_unlock(&mutex_emergenze_attesa);
+        //poi segnalo una nuova emergenza
+        cnd_signal(&cond_nuova_emergenza);    
+    }
+    log_message(LOG_EVENT_GENERAL_ERROR, "Thread ascoltatore", log_msg_buffer);
+    return 0;
+}
+
+
 
 int main(int argc, char* argv[]){
     char log_msg_buffer[LINE_LENGTH + 250];
@@ -64,7 +203,7 @@ int main(int argc, char* argv[]){
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Inizio configurazione ambiente da env.conf");
     if(!parse_environment("env.conf", &global_system_config.config_env)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di env.conf");
-        pulizia_e_uscita(false, false);     //nessuno dei due caricato in teoria
+        pulizia_e_uscita(false, false, false, false);     //nessuno dei due caricato in teoria
         return EXIT_FAILURE;
     }
 
@@ -72,7 +211,7 @@ int main(int argc, char* argv[]){
     log_message(LOG_EVENT_GENERAL_INFO, "main", "Inizio configurazione soccorritori da rescuers.env");
     if(!parse_rescuers("rescuers.conf", &global_system_config)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di rescuers.conf");
-        pulizia_e_uscita(true, false);  //true perchè env.conf potrebbe essere potenzialmente ok
+        pulizia_e_uscita(true, false, false, false);  //true perchè env.conf potrebbe essere potenzialmente ok
         return EXIT_FAILURE;
     }
 
@@ -80,7 +219,7 @@ int main(int argc, char* argv[]){
     log_message(LOG_EVENT_GENERAL_INFO, "main", "Inizio configurazione emergenze da emergency_types.env");
     if(!parse_rescuers("emergency_types.conf", &global_system_config)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di emergency_types.conf");
-        pulizia_e_uscita(true, false);
+        pulizia_e_uscita(true, false, false, false);
         return EXIT_FAILURE;
     }
 
@@ -94,7 +233,7 @@ int main(int argc, char* argv[]){
     //no gemelli digitali
     if((global_system_config.total_digital_twin_da_creare == 0) && (global_system_config.rescuer_type_num > 0)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Presenti tipi di soccorritori ma nessun gemello digitale");
-        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati);
+        pulizia_e_uscita(config_fully_loaded, false, false, false);
         return EXIT_FAILURE;
     }
 
@@ -105,7 +244,7 @@ int main(int argc, char* argv[]){
         if((resc->x) < 0 || (resc->y) < 0 || (resc->x >= global_system_config.config_env.grid_width) || (resc->y >= global_system_config.config_env.grid_height)){
             sprintf(log_msg_buffer, "Coordinate base del soccorritore '%s' fuori dalla griglia", resc->rescuer_type_name);
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, false, false);
             return EXIT_FAILURE;
         }
     }
@@ -117,7 +256,7 @@ int main(int argc, char* argv[]){
         if(!global_digital_twins_array){
             sprintf(log_msg_buffer, "Fallimento allocazione memoria per %d gemelli digitali: '%s'", global_system_config.total_digital_twin_da_creare, strerror(errno));
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-            pulizia_e_uscita(config_fully_loaded, false);
+            pulizia_e_uscita(config_fully_loaded, false, false, false);
             return EXIT_FAILURE;
         }
         
