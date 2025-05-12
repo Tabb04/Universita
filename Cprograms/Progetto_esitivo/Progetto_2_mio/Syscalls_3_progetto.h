@@ -135,11 +135,11 @@
 
     //macro per inizializzazione di mutex e cond var
 
-    #define LOG_SCALL_THRDSC(val, fun, event_type, id, msg, cl_1, cl_2, cl_3, cl_4)\
+    #define LOG_SCALL_THRDSC(val, fun, event_type, id, msg, cl_1, cl_2, cl_3, cl_4, cl_5)\
     do{\
         if((val = (fun)) != thrd_success){\
             log_message(event_type, id, msg);\
-            pulizia_e_uscita(cl_1, cl_2, cl_3, cl_4);\
+            pulizia_e_uscita(cl_1, cl_2, cl_3, cl_4, cl_5);\
             return EXIT_FAILURE;\
         }\
     }while(0)
