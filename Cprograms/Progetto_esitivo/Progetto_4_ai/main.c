@@ -39,6 +39,8 @@ typedef struct {
 emergency_node_t *waiting_emergencies_list_head = NULL; // Testa della lista
 emergency_node_t *waiting_emergencies_list_tail = NULL; // Coda della lista per aggiunte O(1)
 
+
+mtx_t digital_twins_array_mutex;
 mtx_t waiting_emergencies_mutex; // Mutex per proteggere la lista
 cnd_t new_emergency_condition;   // Variabile di condizione per segnalare nuove emergenze
 
@@ -207,15 +209,6 @@ int message_queue_listener_thread_func(void *arg) {
 
 
 static int compare_candidates(const void *a, const void *b) {
-    // Struttura di supporto per tenere traccia dei candidati e del loro tempo
-    // NOTA: Questa struct è definita anche dentro il passo 2,
-    // sarebbe meglio definirla una sola volta a livello di file se usata qui
-    // o passare i dati in modo diverso. Per ora la ridefiniamo qui,
-    // ma è una duplicazione. Vediamo come risolvere meglio dopo.
-    typedef struct {
-        rescuer_digital_twin_t *dt;
-        double time_to_arrive;
-    } rescuer_candidate_t;
 
     rescuer_candidate_t *ca = (rescuer_candidate_t *)a;
     rescuer_candidate_t *cb = (rescuer_candidate_t *)b;
@@ -272,41 +265,22 @@ int emergency_handler_thread_func(void *arg) {
 
         // Preleva l'emergenza dalla testa della lista
         current_emergency_node = waiting_emergencies_list_head;
+
         waiting_emergencies_list_head = waiting_emergencies_list_head->next;
+
         if (waiting_emergencies_list_head == NULL) { // La lista è diventata vuota
             waiting_emergencies_list_tail = NULL;
         }
         mtx_unlock(&waiting_emergencies_mutex);
 
-        long temp_emergency_log_id = (long)current_emergency_node->data.time;
-
-        sprintf(log_msg_buffer, "Thread #%ld: Inizio processamento emergenza (Tipo: %s, Pos: %d,%d, Ricevuta: %ld)",
-                thread_id_for_log,
-                current_emergency_node->data.type->emergency_desc,
-                current_emergency_node->data.x,
-                current_emergency_node->data.y,
-                (long)current_emergency_node->data.time);
-        log_message(LOG_EVENT_EMERGENCY_STATUS, "N/A", log_msg_buffer); // Sostituisci "N/A" con l'ID effettivo dell'emergenza
-
-
-        // 2. Logica di Assegnazione Soccorritori
-        // TODO: Implementare la ricerca e l'assegnazione dei soccorritori
-        //       - Calcolo deadline
-        //       - Scansione global_digital_twins_array (protetta da digital_twins_array_mutex)
-        //       - Calcolo distanza/tempo di arrivo
-        //       - Controllo TIMEOUT
-        //       - Se OK:
-        //         - Allocare current_emergency_node->data.rescuer_dt
-        //         - Copiare i dati dei soccorritori in rescuer_dt
-        //         - Aggiornare stato soccorritori globali a EN_ROUTE_TO_SCENE (log)
-        //         - Aggiornare current_emergency_node->data.resquer_cont
-        //         - Impostare current_emergency_node->data.status = ASSIGNED (log)
-
         emergency_type_t *e_type = current_emergency_node->data.type; // Accesso diretto
         long emergency_log_id = (long)current_emergency_node->data.time; // Usiamo il timestamp come ID temporaneo per i log
         char emergency_id_str[40]; // Buffer per l'ID nei log
         snprintf(emergency_id_str, sizeof(emergency_id_str), "EMG_%ld", emergency_log_id);
-        
+
+        /*
+        qui stava TODO
+        */
 
         sprintf(log_msg_buffer, "Thread #%d: Processo Emergenza %s (Tipo: %s, Pos: %d,%d)",
         thread_id_for_log, emergency_id_str, e_type->emergency_desc,
@@ -364,11 +338,6 @@ int emergency_handler_thread_func(void *arg) {
         bool assignment_possible = true;
         double max_time_to_arrive = 0.0; // Tempo massimo di arrivo tra tutti i soccorritori selezionati
 
-        // Struttura di supporto per tenere traccia dei candidati e del loro tempo
-        typedef struct {
-            rescuer_digital_twin_t *dt;
-            double time_to_arrive;
-        } rescuer_candidate_t;
 
         // 2. Ciclo per ogni tipo di soccorritore richiesto dall'emergenza
         for (int i = 0; i < e_type->rescuer_required_number; ++i) {
@@ -398,7 +367,7 @@ int emergency_handler_thread_func(void *arg) {
                 if (dt->rescuer == required_type && dt->status == IDLE) {
                     // Calcola tempo di arrivo
                     int distance = abs(dt->x - current_emergency_node->data.x) + abs(dt->y - current_emergency_node->data.y); // Accesso diretto
-                    double time_arr = (dt->rescuer->speed > 0) ? ceil((double)distance / dt->rescuer->speed) : -1.0; // -1 indica errore/velocità 0
+                    double time_arr = (dt->rescuer->speed > 0) ? ((double)distance / dt->rescuer->speed) : -1.0; // -1 indica errore/velocità 0
 
                     if(time_arr >= 0) { // Ignora se velocità è 0 o invalida
                         candidates[candidate_count].dt = dt;
@@ -424,7 +393,6 @@ int emergency_handler_thread_func(void *arg) {
             }
 
             // Ordina i candidati per tempo di arrivo (usando qsort)
-            // Funzione di comparazione per qsort
             qsort(candidates, candidate_count, sizeof(rescuer_candidate_t), compare_candidates);
 
             // Seleziona i primi 'needed_count' candidati e aggiungili all'array generale
@@ -486,44 +454,50 @@ int emergency_handler_thread_func(void *arg) {
         log_message(LOG_EVENT_ASSIGNMENT, emergency_id_str, log_msg_buffer);
 
         // Allocare l'array di puntatori nell'emergenza
-        current_emergency_node->data.rescuer_dt = (rescuer_digital_twin_t **)malloc(total_rescuers_needed * sizeof(rescuer_digital_twin_t *)); // Accesso diretto
-        if (!current_emergency_node->data.rescuer_dt) { // Accesso diretto
-            sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Fallimento MALLOC finale per array soccorritori assegnati!", thread_id_for_log, emergency_id_str);
-            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_str, log_msg_buffer);
-            free(selected_rescuers); // Libera l'array temporaneo
-            current_emergency_node->data.status = CANCELED; // Accesso diretto
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (malloc fallito).");
-            free(current_emergency_node);
-            current_emergency_node = NULL;
-            continue;
+        current_emergency_node->data.rescuer_dt = (rescuer_digital_twin_t *)malloc(total_rescuers_needed * sizeof(rescuer_digital_twin_t));
+        if (!current_emergency_node->data.rescuer_dt) {
+             sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Fallimento MALLOC finale per array soccorritori assegnati!", thread_id_for_log, emergency_id_str);
+             log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_str, log_msg_buffer);
+             free(selected_rescuers); // Libera l'array temporaneo di puntatori
+             current_emergency_node->data.status = CANCELED;
+             log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (malloc fallito).");
+             free(current_emergency_node);
+             current_emergency_node = NULL;
+             continue;
         }
-
-        // --- Blocco Critico: Aggiornamento stato soccorritori ---
+        
+        // --- Blocco Critico: Aggiornamento stato soccorritori GLOBALI e COPIA dati nell'emergenza ---
         mtx_lock(&digital_twins_array_mutex);
         bool assignment_conflict = false;
         for (int i = 0; i < total_rescuers_needed; ++i) {
-            rescuer_digital_twin_t *dt_to_assign = selected_rescuers[i];
-            if (dt_to_assign->status != IDLE) {
+            rescuer_digital_twin_t *dt_global_to_assign = selected_rescuers[i]; // Questo è il puntatore al DT globale
+
+            if (dt_global_to_assign->status != IDLE) {
                 // Conflitto! Un altro thread ha preso questo soccorritore nel frattempo
                 sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - CONFLITTO! Soccorritore ID %d non più IDLE durante assegnazione finale.",
-                        thread_id_for_log, emergency_id_str, dt_to_assign->id);
+                        thread_id_for_log, emergency_id_str, dt_global_to_assign->id);
                 log_message(LOG_EVENT_ASSIGNMENT, emergency_id_str, log_msg_buffer);
                 assignment_conflict = true;
-                // Bisogna annullare: Rimettere IDLE quelli già cambiati in questo loop
+                // Rollback dello stato per quelli già cambiati nel global_digital_twins_array
                 for (int k = 0; k < i; ++k) {
-                    selected_rescuers[k]->status = IDLE; // Rollback
-                    // Log rollback?
+                     // selected_rescuers[k] punta al DT globale il cui stato era stato cambiato
+                     selected_rescuers[k]->status = IDLE;
                 }
                 break; // Esci dal loop di assegnazione
             }
-            // Assegna e cambia stato
-            dt_to_assign->status = EN_ROUTE_TO_SCENE;
-            current_emergency_node->data.rescuer_dt[i] = dt_to_assign; // Salva il puntatore nell'array dell'emergenza // Accesso diretto
+
+            // 1. Aggiorna lo stato del soccorritore GLOBALE
+            dt_global_to_assign->status = EN_ROUTE_TO_SCENE;
+
+            // 2. MODIFICA 2: Copia la STRUTTURA del soccorritore globale
+            //    nella i-esima posizione dell'array dell'emergenza.
+            //    Nota: dt_global_to_assign->status è già EN_ROUTE_TO_SCENE qui.
+            current_emergency_node->data.rescuer_dt[i] = *dt_global_to_assign; // COPIA LA STRUTTURA
 
             char rescuer_id_str[20];
-            snprintf(rescuer_id_str, sizeof(rescuer_id_str), "Rescuer_%d", dt_to_assign->id);
-            sprintf(log_msg_buffer, "Soccorritore ID %d ('%s') assegnato a Emergenza %s. Stato -> EN_ROUTE_TO_SCENE.",
-                    dt_to_assign->id, dt_to_assign->rescuer->rescuer_type_name, emergency_id_str);
+            snprintf(rescuer_id_str, sizeof(rescuer_id_str), "Rescuer_%d", dt_global_to_assign->id);
+            sprintf(log_msg_buffer, "Soccorritore ID %d ('%s') assegnato a Emergenza %s. Stato GLOBALE -> EN_ROUTE_TO_SCENE. Dati copiati in emergenza.",
+                    dt_global_to_assign->id, dt_global_to_assign->rescuer->rescuer_type_name, emergency_id_str);
             log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_str, log_msg_buffer);
         }
         mtx_unlock(&digital_twins_array_mutex);
@@ -533,19 +507,20 @@ int emergency_handler_thread_func(void *arg) {
 
         if (assignment_conflict) {
             // L'assegnazione è fallita all'ultimo secondo
-            free(current_emergency_node->data.rescuer_dt); // Libera l'array allocato nell'emergenza // Accesso diretto
-            current_emergency_node->data.rescuer_dt = NULL; // Accesso diretto
-            current_emergency_node->data.status = TIMEOUT; // Riprova? O TIMEOUT/CANCELED? Rimettere in WAITING è complesso. Meglio TIMEOUT. // Accesso diretto
+            // L'array nell'emergenza contiene copie parziali (o nessuna se conflitto al primo), ma va liberato.
+            free(current_emergency_node->data.rescuer_dt);
+            current_emergency_node->data.rescuer_dt = NULL;
+            current_emergency_node->data.status = TIMEOUT;
             log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a TIMEOUT (conflitto assegnazione).");
             free(current_emergency_node);
             current_emergency_node = NULL;
-            continue; // Prova con la prossima emergenza
+            continue;
         }
         
 
         // Assegnazione completata con successo!
-        current_emergency_node->data.resquer_cont = total_rescuers_needed; // Corretto typo e salvato numero // Accesso diretto
-        current_emergency_node->data.status = ASSIGNED; // Accesso diretto
+        current_emergency_node->data.resquer_cont = total_rescuers_needed;
+        current_emergency_node->data.status = ASSIGNED;
         log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a ASSIGNED.");
 
         // --- FINE DELLA PARTE TODO SPECIFICA PER L'ASSEGNAZIONE ---
@@ -556,7 +531,7 @@ int emergency_handler_thread_func(void *arg) {
 
         // Placeholder per ora:
         sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Gestione ciclo vita (TODO)...", thread_id_for_log, emergency_id_str);
-        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);  
 
         // Esempio di simulazione (da implementare correttamente)
         // sleep(max_time_to_arrive);
@@ -566,10 +541,11 @@ int emergency_handler_thread_func(void *arg) {
         // sleep(return_time);
         // // Lock, change status dt -> IDLE, unlock, log...
 
-        // Alla fine del ciclo di vita:
-        if (current_emergency_node->data.rescuer_dt != NULL) { // Accesso diretto
-            free(current_emergency_node->data.rescuer_dt); // Libera l'array di puntatori // Accesso diretto
-            current_emergency_node->data.rescuer_dt = NULL; // Accesso diretto
+
+        // Alla fine del ciclo di vita (o se l'emergenza viene cancellata/timeout dopo l'assegnazione):
+        if (current_emergency_node->data.rescuer_dt != NULL) {
+             free(current_emergency_node->data.rescuer_dt); // Libera l'array di STRUTTURE COPIATE
+             current_emergency_node->data.rescuer_dt = NULL;
         }
         free(current_emergency_node); // Libera il nodo della lista
         current_emergency_node = NULL;
