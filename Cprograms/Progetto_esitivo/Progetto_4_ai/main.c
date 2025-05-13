@@ -446,7 +446,7 @@ int emergency_handler_thread_func(void *arg) {
             continue; // Vai alla prossima emergenza
         }
 
-
+            
 
         // 4. Assignment Effettivo (se tutto OK finora)
         sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Assegnazione confermata. Tempo max arrivo stimato: %.0f sec.",

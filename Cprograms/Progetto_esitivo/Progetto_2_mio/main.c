@@ -416,8 +416,69 @@ int gestore_emergenze_fun(void* arg){
         }
 
         //ASSEGNAMENTO
+        sprintf(log_msg_buffer, "Assegnamento effettuato, tempo previsto di arrivo %.0f secondi", tempo_max_arrivo);
+        log_message(LOG_EVENT_ASSIGNMENT, emergency_id_string, log_msg_buffer);
+
+        //alloco array di puntatori nell'emergenza
+        current_nodo_emergency->data.rescuer_dt = (rescuer_digital_twin_t*)malloc(rescuers_necessari * sizeof(rescuer_digital_twin_t));
+        if(!current_nodo_emergency->data.rescuer_dt){
+            sprintf(log_msg_buffer, "Errore thread #%d, fallita malloc per assegnamento di soccorritori", thread_id_log);
+            free(rescuers_selezionati);
+            current_nodo_emergency->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, log_msg_buffer);
+            free(current_nodo_emergency);
+            current_nodo_emergency = NULL;
+            continue;
+        }
+
+        //qui blocco critico perchè aggiorno stato di soccorritori globali
+        mtx_lock(&mutex_array_gemelli);
+        bool conflitto = false; //se hanno rubato un gemello
+
+        for(int i = 0; i<rescuers_necessari; i++){
+            rescuer_digital_twin_t* gemello_da_assegnare = rescuers_selezionati[i];
+
+            if(gemello_da_assegnare != IDLE){
+
+                //questo significa che un altro thread ha preso questo gemello nel frattempo
+                sprintf(log_msg_buffer, "Errore thread #%d, soccorritore ID=%d non è più idle", thread_id_log, gemello_da_assegnare->id);
+                log_message(LOG_EVENT_ASSIGNMENT, emergency_id_string, log_msg_buffer);
+                conflitto = true;
+
+                for(int k = 0; k<i; k++){
+                    rescuers_selezionati[k]->status = IDLE;
+                    //rimetto a idle tutti i soccorritori prima che erano diventati EN_ROUTE_TO_SCENE
+                }
+                break;
+            }
+            gemello_da_assegnare->status = EN_ROUTE_TO_SCENE;
+
+            //copio la struttura in rescuer_dt[i]
+            //fosse ** sarebbe più comodo
 
 
+            char rescuer_id_string[30]; //stessa roba che con emergency_id_string
+            snprintf(emergency_id_string, sizoef(rescuer_id_string), "Soccorritore %d", gemello_da_assegnare);
+            sprintf(log_msg_buffer, "Soccorritore %d assegnato ad emergenza %s", gemello_da_assegnare->id, emergency_id_string);
+            log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_string, log_msg_buffer);
+        }
+        mtx_unlock(&mutex_array_gemelli);
+        //rilascio mutex
+
+        if(conflitto){
+            free(current_nodo_emergency->data.rescuer_dt);
+            current_nodo_emergency->data.rescuer_dt = NULL;
+            current_nodo_emergency->data.status = TIMEOUT;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Impostato stato emergenza TIMEOUT");
+            free(current_nodo_emergency);
+            current_nodo_emergency = NULL;
+            continue;
+        }
+
+        current_nodo_emergency->data.resquer_cont = rescuers_necessari;
+        current_nodo_emergency->data.status = ASSIGNED;
+        
+        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Impostato stato emergenza ASSIGNED");
 
     }
     
