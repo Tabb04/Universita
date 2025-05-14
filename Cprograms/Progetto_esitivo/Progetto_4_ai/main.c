@@ -752,7 +752,7 @@ int emergency_handler_thread_func(void *arg) {
 
 
 
-        
+
         // Simulazione tempo di gestione, controllando shutdown_flag
         for (double t_manage = 0; t_manage < max_time_to_manage; t_manage += 1.0) {
             if (shutdown_flag) {
@@ -784,7 +784,7 @@ int emergency_handler_thread_func(void *arg) {
             current_emergency_node = NULL;
             continue;
         }
-
+        
         // Gestione completata
         current_emergency_node->data.status = COMPLETED;
         log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a COMPLETED.");
@@ -803,7 +803,7 @@ int emergency_handler_thread_func(void *arg) {
         mtx_unlock(&digital_twins_array_mutex);
 
 
-        // 7. Simulazione Ritorno alla Base
+        // 7. Simulazione Ritorno alla Base         
         sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Inizio simulazione ritorno soccorritori alla base.",
                 thread_id_for_log, emergency_id_str);
         log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
@@ -912,18 +912,10 @@ int emergency_handler_thread_func(void *arg) {
 
 
 
-
-
-
-
-
         // Da qui in poi inizia la gestione del ciclo di vita dell'emergenza
         // (Simulazione viaggio, arrivo, lavoro, ritorno)
         // Questo può essere implementato come passi successivi.
 
-        // Placeholder per ora:
-        sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Gestione ciclo vita (TODO)...", thread_id_for_log, emergency_id_str);
-        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);  
 
         // Esempio di simulazione (da implementare correttamente)
         // sleep(max_time_to_arrive);

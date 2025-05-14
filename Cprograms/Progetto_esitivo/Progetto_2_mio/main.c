@@ -137,12 +137,13 @@ int message_queue_ascoltatore_func(){
 
         //controllo se il tipo di emergenza è tra quelli memorizzati
         if(!tipo_trovato){
-            sprintf("Tipo di emergenza '%s' sconosciuto. Ignoro richiesta", richiesta_ricevuta.emergency_name);
+            sprintf(log_msg_buffer, "Tipo di emergenza '%s' sconosciuto. Ignoro richiesta", richiesta_ricevuta.emergency_name);
             log_message(LOG_EVENT_MESSAGE_QUEUE, "Richiesta invalida", log_msg_buffer);
+            continue;
         }
 
         //faccio tutti i controlli del caso        
-        if((richiesta_ricevuta.x >= global_system_config.config_env.grid_height) || (richiesta_ricevuta.x > 0) || (richiesta_ricevuta.y >= global_system_config.config_env.grid_width) || (richiesta_ricevuta.y > 0)){
+        if((richiesta_ricevuta.x >= global_system_config.config_env.grid_width) || (richiesta_ricevuta.x < 0) || (richiesta_ricevuta.y >= global_system_config.config_env.grid_height) || (richiesta_ricevuta.y < 0)){
             sprintf(log_msg_buffer, "Coordinate di emergenza fuori dalla griglia per '%s'", richiesta_ricevuta.emergency_name);
             log_message(LOG_EVENT_MESSAGE_QUEUE, "Richiesta invalida", log_msg_buffer);
             continue;
@@ -198,9 +199,11 @@ static int sort_candidati(const void* a, const void* b){
 
     if(primo->time_to_arrive < secondo->time_to_arrive){
         return -1;
-    }else{
+    }
+    if(primo->time_to_arrive > secondo->time_to_arrive){
         return 1;
     }
+    return 0;
 }
 
 
@@ -291,7 +294,7 @@ int gestore_emergenze_fun(void* arg){
         rescuer_digital_twin_t** rescuers_selezionati = NULL;
 
         if(rescuers_necessari > 0){
-            rescuers_selezionati = (rescuer_digital_twin_t*)malloc(rescuers_necessari * sizeof(rescuer_digital_twin_t *));
+            rescuers_selezionati = (rescuer_digital_twin_t**)malloc(rescuers_necessari * sizeof(rescuer_digital_twin_t *));
             if(!rescuers_selezionati){
                 sprintf(log_msg_buffer, "Thread #%d, Fallimento allocazione memoria per soccorritori di emergenza %s", thread_id_log, emergency_id_string);
                 log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
@@ -313,11 +316,14 @@ int gestore_emergenze_fun(void* arg){
         }
 
         int current_idx = 0;
-        bool possibile = false;
+        bool possibile = true;
         double tempo_max_arrivo = 0.0;   //tempo max di arrivo tra tutti i soccorritori selezionati
         
         //ciclo per ogni soccorritore richiesto dall'emergenza
         for(int i = 0; i<em_type->rescuer_required_number; i++){
+            if(!possibile){
+                break;
+            }
             rescuer_request_t* request = &em_type->rescuers[i];     //assegno primo tipo di soccorritore
             rescuer_type_t* tipo_richiesto = request->type;
             int required_count = request->required_count;
@@ -339,7 +345,7 @@ int gestore_emergenze_fun(void* arg){
                 if((gemello->rescuer == tipo_richiesto) && (gemello->status == IDLE)){
                     //adesso calcolo il tempo di arrivo
 
-                    int distanza = (abs(gemello->x - current_nodo_emergency->data.x) - abs(gemello->y - current_nodo_emergency->data.y));
+                    int distanza = (abs(gemello->x - current_nodo_emergency->data.x) + abs(gemello->y - current_nodo_emergency->data.y));
                     double tempo_arrivo;
                     if(gemello->rescuer->speed > 0){
                         tempo_arrivo = ciel(((double)distanza) / (gemello->rescuer->speed));
@@ -350,6 +356,7 @@ int gestore_emergenze_fun(void* arg){
                     if(tempo_arrivo >= 0){
                         candidati[count_candidati].dt = gemello;
                         candidati[count_candidati].time_to_arrive = tempo_arrivo;
+                        count_candidati++;
                     }else{
                         sprintf(log_msg_buffer, "Errore da Thread gestore #%d per emergenza %s. Soccorritore %d ha velocità <= 0", thread_id_log, emergency_id_string, gemello->rescuer->rescuer_type_name);
                         log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
@@ -395,7 +402,7 @@ int gestore_emergenze_fun(void* arg){
             time_t ora = time(NULL);
             time_t tempo_stimato_arrivo = ora + (time_t)tempo_max_arrivo;
 
-            if((deadline < 0) && (tempo_stimato_arrivo > deadline)){
+            if((deadline > 0) && (tempo_stimato_arrivo > deadline)){
                 sprintf(log_msg_buffer, "Errore Thread #%d per emergenza %s. TIMEOUT, tempo stimato supera deadline", thread_id_log, emergency_id_string);
                 log_message(LOG_EVENT_TIMEOUT, emergency_id_string, log_msg_buffer);
                 current_nodo_emergency->data.status =  TIMEOUT;
@@ -452,7 +459,7 @@ int gestore_emergenze_fun(void* arg){
                 conflitto = true;
 
                 for(int k = 0; k<i; k++){
-                    rescuers_selezionati[k]->status = IDLE;
+                    current_nodo_emergency->data.rescuer_dt[k]->status = IDLE;
                     //rimetto a idle tutti i soccorritori prima che erano diventati EN_ROUTE_TO_SCENE
                 }
                 break;
@@ -464,7 +471,7 @@ int gestore_emergenze_fun(void* arg){
 
 
             char rescuer_id_string[30]; //stessa roba che con emergency_id_string
-            snprintf(emergency_id_string, sizoef(rescuer_id_string), "Soccorritore %d", gemello_da_assegnare);
+            snprintf(emergency_id_string, sizeof(rescuer_id_string), "Soccorritore %d", gemello_da_assegnare);
             sprintf(log_msg_buffer, "Soccorritore %d assegnato ad emergenza %s", gemello_da_assegnare->id, emergency_id_string);
             log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_string, log_msg_buffer);
         }
@@ -548,7 +555,7 @@ int gestore_emergenze_fun(void* arg){
 
         for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
             rescuer_digital_twin_t* gemello = current_nodo_emergency->data.rescuer_dt[i];
-            int distanza = (abs(gemello->x - current_nodo_emergency->data.x)) - (abs(gemello->y - current_nodo_emergency->data.y));
+            int distanza = (abs(gemello->x - current_nodo_emergency->data.x)) + (abs(gemello->y - current_nodo_emergency->data.y));
             if(gemello->rescuer->speed > 0){
                 tempi_di_arrivo_individuali[i] = ciel(((double)distanza) / (gemello->rescuer->speed));
             }else{
@@ -720,21 +727,161 @@ int gestore_emergenze_fun(void* arg){
         log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
 
 
-        //CONTINUA QUI
+        //simulo tempo di gestione emergenza sul posto, controllando shutdown flag
+        //faccio nello stesso modo incrementando di un secondo alla volta
+        for(double i = 0.0; i<tempo_su_emergenza_max; i+=1){
+            if(shutdown_flag){
+                sprintf(log_msg_buffer, "Thread #%d, Richiesto shutdown durante gestione sul posto", thread_id_log);
+                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                possibile = false;  //la uso per dire che non proseguo
+                break;
+            }
+            thrd_sleep(&(struct timespec){.tv_sec = 1, .tv_nsec = 0}, NULL);
+        }
+
+        if(!possibile || shutdown_flag){
+            current_nodo_emergency->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+
+            //sempre stessa cosa sistemo tutti i soccorritori
+            mtx_lock(&mutex_array_gemelli);
+            for(int j = 0; j<current_nodo_emergency->data.resquer_cont; j++){
+                if(current_nodo_emergency->data.rescuer_dt[j] != NULL){
+                    current_nodo_emergency->data.rescuer_dt[j]->status = IDLE;
+                }
+            }
+            mtx_unlock(&mutex_array_gemelli);
+
+            free(sulla_scena);
+            if (current_nodo_emergency->data.rescuer_dt) free(current_nodo_emergency->data.rescuer_dt);
+            current_nodo_emergency->data.rescuer_dt = NULL;
+            free(current_nodo_emergency);
+            current_nodo_emergency = NULL;
+            continue;
+        }
+
+        //se sono qui vuol dire che ho finito di aspettare
+        current_nodo_emergency->data.status = COMPLETED;
+        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a COMPLETED");
+
         
+        //posso ritornare alla base, cambio stato dei gemelli
+        mtx_lock(&mutex_array_gemelli);
+        for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
+            rescuer_digital_twin_t* gemello = current_nodo_emergency->data.rescuer_dt[i];   //per praticità
+            gemello->status = RETURNING_TO_BASE;
+
+            char buf_rescuer[30];   //per comodità
+            snprintf(buf_rescuer, sizeof(buf_rescuer), "Rescuer %d", gemello->id);
+            sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s ha completato il lavoro", gemello->id, gemello->rescuer->rescuer_type_name, emergency_id_string);
+            log_message(LOG_EVENT_RESCUER_STATUS, buf_rescuer, log_msg_buffer);
+        }
+        mtx_unlock(&mutex_array_gemelli);
 
 
+        //devo anche simulare il ritorno verso la base
 
+        sprintf(log_msg_buffer, "Thread #%d, emergenza %s inizia simulazione viaggio verso base",thread_id_log, emergency_id_string);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
 
+        double tempo_ritorno_max = 0.0;
+        //riciclo sulla_scena per dire se è in base
+        for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
+            sulla_scena[i] = false;
+        }
 
+        for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
 
+            //è tutto identico tranne calcolato da emergenza/posizione del soccorritore a base
+            rescuer_digital_twin_t* gemello = current_nodo_emergency->data.rescuer_dt[i];
+            int distanza = (abs(gemello->x - gemello->rescuer->x)) + (abs(gemello->y - gemello->rescuer->y));
+            double tempo;
 
+            if(gemello->rescuer->speed > 0){
+                tempo = ceil((double)distanza / gemello->rescuer->speed);
+            }else{
+                //in teoria non avrebbe senso essere qui, per sicurezza se ci arrivo do tempo istantaneo
+                tempo = 0;
+            }
+            if(tempo_ritorno_max < tempo){
+                tempo_ritorno_max = tempo;
+            }
+        }
 
+        int soccorritore_tornati_base = 0;
+        for(double j = 0; j<tempo_ritorno_max; j+=1){
+            if(shutdown_flag){
+                sprintf(log_msg_buffer, "Thread #%d, Richiesto shutdown durante ritorno in base", thread_id_log);
+                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                possibile = false;  //la uso per dire che non proseguo
+                break;
+            }
+            thrd_sleep(&(struct timespec){.tv_sec = 1, .tv_nsec = 0}, NULL);
 
+            for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
+                if(!sulla_scena[i]){
+                    rescuer_digital_twin_t* gemello_rientrante = current_nodo_emergency->data.rescuer_dt[i];
+                    int distanza = abs(gemello_rientrante->x - gemello_rientrante->rescuer->x) + abs(gemello_rientrante->y - gemello_rientrante->rescuer->y);
+                    double tempo_rientro;
+                    if(gemello_rientrante->rescuer->speed > 0){
+                        tempo_rientro = ceil((double)distanza / gemello_rientrante->rescuer->speed);
+                    }else{
+                        //stessa cosa qui non dovrebbe essere possibile ma per sicurezza faccio istantaneo
+                        tempo_rientro = 0;
+                    }
 
+                    if(tempo_rientro < (j+1.0)){    //stesso controllo dell'andata
+                        sulla_scena[i] = true;
+                        soccorritore_tornati_base++;
 
+                        //metto il gemello di nuovo in base e lo metto idle
+                        mtx_lock(&mutex_array_gemelli);
+                        gemello_rientrante->status = IDLE;
+                        gemello_rientrante->x = gemello_rientrante->rescuer->x;
+                        gemello_rientrante->y = gemello_rientrante->rescuer->y;
+                        mtx_unlock(&mutex_array_gemelli);
 
+                        char buf_rescuer[30];
+                        snprintf(buf_rescuer, sizeof(buf_rescuer), "Rescuer %d", gemello_rientrante->id);
+                        sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s rientra in base", gemello_rientrante->id, gemello_rientrante->rescuer->rescuer_type_name, emergency_id_string);
+                        log_message(LOG_EVENT_RESCUER_STATUS, buf_rescuer, log_msg_buffer);
 
+                    }
+                }
+            }
+            if(soccorritore_tornati_base == current_nodo_emergency->data.resquer_cont){
+                break;  //rientrati tutti
+            }     
+        }
+
+        free(sulla_scena);  //usato per scena e rientro
+
+        if(!possibile || shutdown_flag){
+            //io per sicurezza rimetto tutti a idle
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Shutdown nel rientro dei soccorritori in base");
+
+            mtx_lock(&mutex_array_gemelli);
+            for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
+                if(current_nodo_emergency->data.rescuer_dt[i] != NULL){
+                    rescuer_digital_twin_t* gemello_finale = current_nodo_emergency->data.rescuer_dt[i];
+                    gemello_finale->status = IDLE;
+                    gemello_finale->x = gemello_finale->rescuer->x;
+                    gemello_finale->y = gemello_finale->rescuer->y;
+                }
+            }
+            mtx_unlock(&mutex_array_gemelli);
+        }
+
+        sprintf(log_msg_buffer, "Thread #%d, emergenza %s. Gestione terminata, soccorritori tornati in base", thread_id_log, emergency_id_string);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+
+        //pulisco
+        if(current_nodo_emergency->data.rescuer_dt != NULL){
+            free(current_nodo_emergency->data.rescuer_dt);
+            current_nodo_emergency->data.rescuer_dt = NULL;
+        }
+        free(current_nodo_emergency);
+        current_nodo_emergency = NULL;
 
 
 
@@ -748,7 +895,6 @@ int gestore_emergenze_fun(void* arg){
     free(thread_args);
     return 0;
 }
-
 
 
 
@@ -788,7 +934,7 @@ int main(int argc, char* argv[]){
     }
 
     //parsing soccorritori
-    log_message(LOG_EVENT_GENERAL_INFO, "main", "Inizio configurazione soccorritori da rescuers.env");
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Inizio configurazione soccorritori da rescuers.env");
     if(!parse_rescuers("rescuers.conf", &global_system_config)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di rescuers.conf");
         pulizia_e_uscita(true, false, false, false, false);  //true perchè env.conf potrebbe essere potenzialmente ok
@@ -796,8 +942,8 @@ int main(int argc, char* argv[]){
     }
 
     //parsing emergenze
-    log_message(LOG_EVENT_GENERAL_INFO, "main", "Inizio configurazione emergenze da emergency_types.env");
-    if(!parse_rescuers("emergency_types.conf", &global_system_config)){
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Inizio configurazione emergenze da emergency_types.env");
+    if(!parse_emergency_types("emergency_types.conf", &global_system_config)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di emergency_types.conf");
         pulizia_e_uscita(true, false, false, false, false);
         return EXIT_FAILURE;
@@ -805,7 +951,7 @@ int main(int argc, char* argv[]){
 
     //andato tutto bene
     config_fully_loaded = true;
-    log_message(LOG_EVENT_GENERAL_INFO, "main", "Configurazione avvenuta con successo");
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Configurazione avvenuta con successo");
 
 
     //controllo configurazione basic
@@ -840,12 +986,12 @@ int main(int argc, char* argv[]){
             return EXIT_FAILURE;
         }
         
-        sprintf(log_msg_buffer, "Allocato spazio per %d gemelli digitali: '%s'", global_system_config.total_digital_twin_da_creare, strerror(errno));
+        sprintf(log_msg_buffer, "Allocato spazio per %d gemelli digitali", global_system_config.total_digital_twin_da_creare);
         log_message(LOG_EVENT_GENERAL_INFO, "Main", log_msg_buffer);
 
         int indice_gemello = 0;
-        for(int i = 0; i<global_system_config.emergency_type_num; i++){
-            rescuer_type_t* tipo_corrente = &global_system_config.emergency_types_array[i];
+        for(int i = 0; i<global_system_config.rescuer_type_num; i++){
+            rescuer_type_t* tipo_corrente = &global_system_config.rescuers_type_array[i];
             int istanze_da_fare = global_system_config.instances_per_rescuer_type[i];   //array che mi ero fatto per quanti ad ogn tipo
             //sarebbe stato meglio mettelo dentro il tipo stesso ma prof non mi risponde
 
@@ -937,12 +1083,12 @@ int main(int argc, char* argv[]){
     //anche qui potrei provare ad utilizzare una macro ma ho comportamenti diversi
     //in base a se la coda è già inizializzata
     mq_desc_globale = mq_open(nome_mq_queue, O_CREAT | O_RDONLY | O_EXCL, 0660, &attributi);
-    if(mq_desc_globale = (mqd_t)-1){
+    if(mq_desc_globale == (mqd_t)-1){
         if(errno == EEXIST){    //coda esiste già
             log_message(LOG_EVENT_MESSAGE_QUEUE, "Main", "Coda messaggi già esistente, apro");
             mq_desc_globale = mq_open(nome_mq_queue, O_RDONLY);
         }
-        if(mq_desc_globale = (mqd_t)-1){    //ha fallito di nuovo
+        if(mq_desc_globale == (mqd_t)-1){    //ha fallito di nuovo
             sprintf(log_msg_buffer, "Fallimento apertura coda con nome %s: '%s'", nome_mq_queue, strerror(errno));
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
             pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, false, sync_inizializzate, digital_twins_mutex_inizializzata);
@@ -1008,16 +1154,9 @@ int main(int argc, char* argv[]){
             }
 
             //devo joinare tutti quelli creati fino a quello fallito
-            for(int j = 0; j<i; j++){
+            for(int j = 0; j < i; j++){ // Solo i thread gestori creati con successo
                 thrd_join(array_id_gestori[j], NULL);
-                if((thrd_join(array_id_gestori[i], NULL)) != thrd_success){
-                    sprintf(log_msg_buffer, "Errore join del thread gestore #%d", j);
-                    log_message(LOG_EVENT_GENERAL_ERROR, "Cleanup", log_msg_buffer);
-                }else{
-                    sprintf(log_msg_buffer, "Effettuata join per thread gestore #%d", j);
-                    log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", log_msg_buffer);
-                }
-                free(array_args_gestori[j]);
+                free(array_args_gestori[j]); // Libera gli argomenti dei thread joinati
             }
             free(array_args_gestori[i]);
             pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata);
@@ -1035,9 +1174,7 @@ int main(int argc, char* argv[]){
     shutdown_flag = true;
     cnd_broadcast(&cond_nuova_emergenza);   //sveglio i gestori
 
-    if(message_queue_open && (mq_desc_globale != (mqd_t)-1)){
-        //SCRIVI
-    }
+    
 
 
     //aspetto terminazione del thread ascoltatore e controllo valore di uscita
@@ -1047,24 +1184,47 @@ int main(int argc, char* argv[]){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Fallimento di join thread ascoltatore");
     }else{
         sprintf(log_msg_buffer, "Thread ascoltatore terminato: '%d'", res_listener);
-        log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
+        log_message(LOG_EVENT_GENERAL_INFO, "Main", log_msg_buffer);
     }
 
     for(int i = 0; i<NUM_THREADS_GESTORI; i++){
         if(thrd_join(array_id_gestori[i], res_listener) != thrd_success){
-            sprintf(log_message, "Fallimento di join thread su gestore #%d", i);
+            sprintf(log_msg_buffer, "Fallimento di join thread su gestore #%d", i);
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
         }else{
-            sprintf(log_message, "Thread gestore #%d terminato", i);
+            sprintf(log_msg_buffer, "Thread gestore #%d terminato", i);
             log_message(LOG_EVENT_GENERAL_INFO, "Main", log_msg_buffer);
         }
     }
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Tutti i threadsono stati terminati");
 
+
+
+
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Pulizia risorse");
 
     pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata);
     //il logger viene chiuso in cleanup
+    if(message_queue_open){ 
+        char nome_unlink[LINE_LENGTH + 2];
+        
+        //controllo sia lo stesso usato nella open
+        if(global_system_config.config_env.queue_name[0] != '/'){
+            snprintf(nome_unlink, sizeof(nome_unlink), "/%s", global_system_config.config_env.queue_name);
+        }else{
+            strncpy(nome_unlink, global_system_config.config_env.queue_name, sizeof(nome_unlink)-1);
+            nome_unlink[sizeof(nome_unlink)-1] = '\0';
+        }
+
+        if(mq_unlink(nome_unlink) == -1){
+            sprintf(log_msg_buffer, "Fallita unlink per coda '%s': %s", nome_unlink, strerror(errno));
+            log_message(LOG_EVENT_MESSAGE_QUEUE, "Main_Shutdown", log_msg_buffer);
+        }else{
+            sprintf(log_msg_buffer, "Unlink effettuata su '%s'", nome_unlink);
+            log_message(LOG_EVENT_MESSAGE_QUEUE, "Main_Shutdown", log_msg_buffer);
+        }
+    }
+    
     printf("Sistema terminato correttamente\n");
     return EXIT_SUCCESS;
 }
