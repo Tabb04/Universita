@@ -420,16 +420,22 @@ int gestore_emergenze_fun(void* arg){
         log_message(LOG_EVENT_ASSIGNMENT, emergency_id_string, log_msg_buffer);
 
         //alloco array di puntatori nell'emergenza
-        current_nodo_emergency->data.rescuer_dt = (rescuer_digital_twin_t*)malloc(rescuers_necessari * sizeof(rescuer_digital_twin_t));
+        current_nodo_emergency->data.rescuer_dt = (rescuer_digital_twin_t **)malloc(rescuers_necessari * sizeof(rescuer_digital_twin_t *));
         if(!current_nodo_emergency->data.rescuer_dt){
+            
             sprintf(log_msg_buffer, "Errore thread #%d, fallita malloc per assegnamento di soccorritori", thread_id_log);
-            free(rescuers_selezionati);
+            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, log_msg_buffer);
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
             free(current_nodo_emergency);
             current_nodo_emergency = NULL;
-            continue;
+            if(rescuers_selezionati){
+                free(rescuers_selezionati);
+            }
+            continue;   //passo alla prossima emergenza
         }
+
 
         //qui blocco critico perchè aggiorno stato di soccorritori globali
         mtx_lock(&mutex_array_gemelli);
@@ -438,7 +444,7 @@ int gestore_emergenze_fun(void* arg){
         for(int i = 0; i<rescuers_necessari; i++){
             rescuer_digital_twin_t* gemello_da_assegnare = rescuers_selezionati[i];
 
-            if(gemello_da_assegnare != IDLE){
+            if(gemello_da_assegnare->status != IDLE){
 
                 //questo significa che un altro thread ha preso questo gemello nel frattempo
                 sprintf(log_msg_buffer, "Errore thread #%d, soccorritore ID=%d non è più idle", thread_id_log, gemello_da_assegnare->id);
@@ -451,10 +457,10 @@ int gestore_emergenze_fun(void* arg){
                 }
                 break;
             }
-            gemello_da_assegnare->status = EN_ROUTE_TO_SCENE;
 
-            //copio la struttura in rescuer_dt[i]
-            //fosse ** sarebbe più comodo
+            //assegno puntatore del soccorritore globale all'array dell'emergenza
+            current_nodo_emergency->data.rescuer_dt[i] = gemello_da_assegnare;
+            gemello_da_assegnare->status = EN_ROUTE_TO_SCENE;
 
 
             char rescuer_id_string[30]; //stessa roba che con emergency_id_string
@@ -465,9 +471,18 @@ int gestore_emergenze_fun(void* arg){
         mtx_unlock(&mutex_array_gemelli);
         //rilascio mutex
 
+
+        if(rescuers_selezionati){
+            free(rescuers_selezionati);
+            rescuers_selezionati = NULL;
+        }
+
         if(conflitto){
-            free(current_nodo_emergency->data.rescuer_dt);
-            current_nodo_emergency->data.rescuer_dt = NULL;
+            if(current_nodo_emergency->data.rescuer_dt != NULL){    //controllo per sicurezza
+                free(current_nodo_emergency->data.rescuer_dt);
+                current_nodo_emergency->data.rescuer_dt = NULL;
+            }
+
             current_nodo_emergency->data.status = TIMEOUT;
             log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Impostato stato emergenza TIMEOUT");
             free(current_nodo_emergency);
@@ -479,6 +494,251 @@ int gestore_emergenze_fun(void* arg){
         current_nodo_emergency->data.status = ASSIGNED;
         
         log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Impostato stato emergenza ASSIGNED");
+
+
+
+
+        //GESTIONE EMERGENZA
+        //per primo viaggio e arrivo all'emergenza
+
+        sprintf(log_msg_buffer, "Thread #%d. Inizia viaggio dei soccorritori", thread_id_log);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+
+        //prima voglio calcolare i tempi di arrivo individuali
+        double* tempi_di_arrivo_individuali = (double*)calloc(current_nodo_emergency->data.resquer_cont, sizeof(double));
+        bool* sulla_scena = (bool*)calloc(current_nodo_emergency->data.resquer_cont, sizeof(bool));
+        //uso calloc in questo caso così non ho valori spazzatura
+
+        if(!tempi_di_arrivo_individuali || !sulla_scena){
+            sprintf(log_msg_buffer, "Errore Thread #%d. Fallita allocazione per tempi di arrivo e/o bool su scena", thread_id_log);
+            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+
+            current_nodo_emergency->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+            
+            //aggiorno i gemelli prima e rimetto a idle
+            mtx_lock(&mutex_array_gemelli);
+            for(int k = 0; k < current_nodo_emergency->data.resquer_cont; k++) {
+                if (current_nodo_emergency->data.rescuer_dt[k] != NULL) {
+                    current_nodo_emergency->data.rescuer_dt[k]->status = IDLE;
+                }
+            }
+            mtx_unlock(&mutex_array_gemelli);
+
+            //non so quale abbia fallito
+            if(tempi_di_arrivo_individuali){
+                free(tempi_di_arrivo_individuali);
+            }
+            if(sulla_scena){
+                free(sulla_scena);
+            }
+            if(current_nodo_emergency->data.rescuer_dt){
+                free(current_nodo_emergency->data.rescuer_dt);
+                current_nodo_emergency->data.rescuer_dt = NULL;
+            }
+
+            free(current_nodo_emergency);
+            current_nodo_emergency = NULL; 
+            continue;
+        }
+
+        //tempo per simulare
+        time_t inizio_simulazione = time(NULL);
+        double tempo_arrivo_tot_max = 0.0;
+
+        for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
+            rescuer_digital_twin_t* gemello = current_nodo_emergency->data.rescuer_dt[i];
+            int distanza = (abs(gemello->x - current_nodo_emergency->data.x)) - (abs(gemello->y - current_nodo_emergency->data.y));
+            if(gemello->rescuer->speed > 0){
+                tempi_di_arrivo_individuali[i] = ciel(((double)distanza) / (gemello->rescuer->speed));
+            }else{
+                tempi_di_arrivo_individuali[i] = -1.0;
+            }
+            sulla_scena[i] = false;
+            
+            if(tempi_di_arrivo_individuali[i] < 0){
+                sprintf(log_msg_buffer, "Errore thread #%d per emergenza %s. Velocità invalida", thread_id_log, emergency_id_string);
+                log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+                
+                //non è possibile gestire l'emergenza
+                possibile = false; //riuso sto flag
+                break;
+            }
+
+            //devo salvarmi possibilmente il più lento
+            if(tempi_di_arrivo_individuali[i] > tempo_arrivo_tot_max){
+                tempo_arrivo_tot_max = tempi_di_arrivo_individuali[i];
+            }
+        }
+
+        if(!possibile){
+            current_nodo_emergency->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+            
+            //faccio stessa cosa sui gemelli prima
+            mtx_lock(&mutex_array_gemelli);
+            for(int j = 0; j < current_nodo_emergency->data.resquer_cont; j++) {
+                if(current_nodo_emergency->data.rescuer_dt[j] != NULL){
+                    current_nodo_emergency->data.rescuer_dt[j]->status = IDLE;
+                }
+            }
+            mtx_unlock(&mutex_array_gemelli);
+
+            //libero tutto
+            free(tempi_di_arrivo_individuali);
+            free(sulla_scena);
+            if(current_nodo_emergency->data.rescuer_dt) {
+                free(current_nodo_emergency->data.rescuer_dt);
+            }
+            current_nodo_emergency->data.rescuer_dt = NULL;
+            free(current_nodo_emergency);
+            current_nodo_emergency = NULL;
+            continue;
+        }
+
+
+        //a questo punto potrei semplicemente aspettare il tempo necessario
+        //ma preferisco andare ad intervalli di un secondo all volta
+        //per gestire il controllo della shutdown flag e gli arrivi scaglionati
+
+
+        int rescuer_arrivati = 0;
+        for(double i = 0; i<tempo_arrivo_tot_max; i += 1.0){    //si incrementa così il double
+            if(shutdown_flag){
+                sprintf(log_msg_buffer, "Thread #%d, Richiesto shutdown durante viaggio soccorritori", thread_id_log);
+                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                possibile = false;
+                break;
+            }
+
+            thrd_sleep(&(struct timespec){.tv_sec = 1, .tv_nsec = 0}, NULL);    //come si faceva a lezione
+            
+            //ora controllo se qualche soccorritore è per caso arrivato
+            for(int j = 0; j<current_nodo_emergency->data.resquer_cont; j++){
+                if(!sulla_scena[j] && (i + 1.0) >= tempi_di_arrivo_individuali[j]){
+                    //se non c'è ma il suo tempo di arrivo è minore
+                    //del tempo corrente + 1 allora è arrivato
+        
+                    sulla_scena[j] = true;
+                    rescuer_arrivati++;
+
+                    //mi salvo chi è arrivato
+                    rescuer_digital_twin_t* gemello_arrivato = current_nodo_emergency->data.rescuer_dt[j];
+                    
+                    mtx_lock(&mutex_array_gemelli);
+                    //ora devo modificarlo cambiando stato e posizione
+                    gemello_arrivato->status = ON_SCENE;
+                    gemello_arrivato->x = current_nodo_emergency->data.x;
+                    gemello_arrivato->y = current_nodo_emergency->data.y;
+                    mtx_unlock(&mutex_array_gemelli);
+
+                    char buf_soccorritore[30];  //loggare
+                    snprintf(buf_soccorritore, sizeof(buf_soccorritore), "Soccorritore %d", gemello_arrivato->id);
+                    sprintf(log_msg_buffer, "Soccorritore con ID=%d '%s', Arrivato ad emergenza %s. Aggiorata posizione e stato", gemello_arrivato->id, gemello_arrivato->rescuer->rescuer_type_name, emergency_id_string);
+                    log_message(LOG_EVENT_RESCUER_STATUS, buf_soccorritore, log_msg_buffer);
+                }
+            }
+
+            //se tutti i soccorritori sono arrivati posso uscire dal loop di attesa
+            if(rescuer_arrivati == current_nodo_emergency->data.resquer_cont){
+                break;  
+            }
+        }
+        free(tempi_di_arrivo_individuali);
+
+        if(!possibile || shutdown_flag){
+            current_nodo_emergency->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+
+            //pulisco i soccorritori EN_ROUTE o ON_SCENE
+
+            mtx_lock(&mutex_array_gemelli);
+            for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
+                if(current_nodo_emergency->data.rescuer_dt[i] != NULL){
+                    current_nodo_emergency->data.rescuer_dt[i]->status = IDLE;
+                }
+            }
+            mtx_unlock(&mutex_array_gemelli);
+
+            free(sulla_scena);
+            if(current_nodo_emergency->data.rescuer_dt){
+                free(current_nodo_emergency->data.rescuer_dt);
+            }
+            current_nodo_emergency->data.rescuer_dt = NULL;
+            free(current_nodo_emergency);
+            current_nodo_emergency = NULL;
+            continue;
+        }
+
+        //se sono qui tutti i soccorritori sono ON_SCENE
+        //controllo comunque
+        if (rescuer_arrivati < current_nodo_emergency->data.resquer_cont) {
+            sprintf(log_msg_buffer, "Errore thread #%d, non sono arrivati tutti i soccorritori", thread_id_log);
+            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+            
+            //pulisco anche qui
+            current_nodo_emergency->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED (errore logico arrivi).");
+            
+            //aggiorno tutti i gemello
+            mtx_lock(&mutex_array_gemelli);
+            for(int j = 0; j < current_nodo_emergency->data.resquer_cont; j++){
+                if(current_nodo_emergency->data.rescuer_dt[j] != NULL){
+                    current_nodo_emergency->data.rescuer_dt[j]->status = IDLE;
+                }
+            }
+            mtx_unlock(&mutex_array_gemelli);
+
+
+            free(sulla_scena);
+            if(current_nodo_emergency->data.rescuer_dt){
+                free(current_nodo_emergency->data.rescuer_dt);
+            }
+            current_nodo_emergency->data.rescuer_dt = NULL;
+            free(current_nodo_emergency);
+            current_nodo_emergency = NULL;
+            continue;
+        }
+
+        //ora emergenza diventa IN_PROGRESS
+        current_nodo_emergency->data.status = IN_PROGRESS;
+        sprintf(log_msg_buffer, "Sono arrivati tutti i soccorritori per emergenza %s", emergency_id_string);
+        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, log_msg_buffer);
+
+
+
+        //adesso possiamo simulare il lavoro sulla scena
+        double tempo_su_emergenza_max = 0.0;    //prendo il maggiore dei tempi
+        for(int i = 0; i<current_nodo_emergency->data.type->rescuer_required_number; i++){
+            //sto iterando sul numero di tipi richiesti non sui soccorritori che ho
+            if(((double)current_nodo_emergency->data.type->rescuers[i].time_to_manage) > tempo_su_emergenza_max){
+                tempo_su_emergenza_max = (double)current_nodo_emergency->data.type->rescuers[i].time_to_manage;
+            }
+        }
+
+        sprintf(log_msg_buffer, "Inizio gestione emergenza '%s' da thread #%d sul posto, tempo stimato %.0f", emergency_id_string, thread_id_log, tempo_su_emergenza_max);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+
+
+        //CONTINUA QUI
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     }
     

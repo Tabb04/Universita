@@ -450,80 +450,472 @@ int emergency_handler_thread_func(void *arg) {
 
         // 4. Assignment Effettivo (se tutto OK finora)
         sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Assegnazione confermata. Tempo max arrivo stimato: %.0f sec.",
-                thread_id_for_log, emergency_id_str, max_time_to_arrive);
+                thread_id_for_log, emergency_id_str, max_time_to_arrive); // max_time_to_arrive calcolato nel Passo 2
         log_message(LOG_EVENT_ASSIGNMENT, emergency_id_str, log_msg_buffer);
 
         // Allocare l'array di puntatori nell'emergenza
-        current_emergency_node->data.rescuer_dt = (rescuer_digital_twin_t *)malloc(total_rescuers_needed * sizeof(rescuer_digital_twin_t));
+        current_emergency_node->data.rescuer_dt = (rescuer_digital_twin_t **)malloc(total_rescuers_needed * sizeof(rescuer_digital_twin_t *));
         if (!current_emergency_node->data.rescuer_dt) {
-             sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Fallimento MALLOC finale per array soccorritori assegnati!", thread_id_for_log, emergency_id_str);
-             log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_str, log_msg_buffer);
-             free(selected_rescuers); // Libera l'array temporaneo di puntatori
-             current_emergency_node->data.status = CANCELED;
-             log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (malloc fallito).");
-             free(current_emergency_node);
-             current_emergency_node = NULL;
-             continue;
+            sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Fallimento MALLOC finale per array di puntatori soccorritori assegnati!", thread_id_for_log, emergency_id_str);
+            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_str, log_msg_buffer);
+            
+            // selected_rescuers è l'array temporaneo dei candidati, va liberato se non già fatto
+            // (ma di solito si libera dopo il blocco critico o se l'assegnazione fallisce).
+            // Se selected_rescuers è stato allocato in questo scope, liberalo.
+            // Assumiamo che selected_rescuers sia stato allocato e sarà liberato dopo questo blocco.
+
+            current_emergency_node->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (malloc fallito).");
+            // Non c'è rescuer_dt da liberare nell'emergenza perché la sua allocazione è fallita
+            free(current_emergency_node);
+            current_emergency_node = NULL;
+            if (selected_rescuers) free(selected_rescuers); // Libera l'array temporaneo dei candidati
+            continue; // Vai alla prossima emergenza
         }
         
-        // --- Blocco Critico: Aggiornamento stato soccorritori GLOBALI e COPIA dati nell'emergenza ---
+        
+
+        // --- Blocco Critico: Aggiornamento stato soccorritori e assegnazione puntatori ---
         mtx_lock(&digital_twins_array_mutex);
         bool assignment_conflict = false;
         for (int i = 0; i < total_rescuers_needed; ++i) {
-            rescuer_digital_twin_t *dt_global_to_assign = selected_rescuers[i]; // Questo è il puntatore al DT globale
+            // selected_rescuers[i] è un puntatore al soccorritore globale scelto
+            rescuer_digital_twin_t *dt_global_to_assign = selected_rescuers[i];
 
             if (dt_global_to_assign->status != IDLE) {
                 // Conflitto! Un altro thread ha preso questo soccorritore nel frattempo
-                sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - CONFLITTO! Soccorritore ID %d non più IDLE durante assegnazione finale.",
-                        thread_id_for_log, emergency_id_str, dt_global_to_assign->id);
+                sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - CONFLITTO! Soccorritore ID %d (Tipo: %s) non più IDLE durante assegnazione finale.",
+                        thread_id_for_log, emergency_id_str, dt_global_to_assign->id, dt_global_to_assign->rescuer->rescuer_type_name);
                 log_message(LOG_EVENT_ASSIGNMENT, emergency_id_str, log_msg_buffer);
                 assignment_conflict = true;
-                // Rollback dello stato per quelli già cambiati nel global_digital_twins_array
-                for (int k = 0; k < i; ++k) {
-                     // selected_rescuers[k] punta al DT globale il cui stato era stato cambiato
-                     selected_rescuers[k]->status = IDLE;
+                // Bisogna annullare: Rimettere IDLE i soccorritori globali che avevamo *già* cambiato
+                // a EN_ROUTE_TO_SCENE in *questo specifico tentativo di assegnazione* (quelli prima di 'i').
+                for (int k_rollback = 0; k_rollback < i; ++k_rollback) {
+                    // current_emergency_node->data.rescuer_dt[k_rollback] punta al soccorritore globale precedentemente modificato
+                    current_emergency_node->data.rescuer_dt[k_rollback]->status = IDLE;
+                    // Log del rollback opzionale
+                    char rescuer_id_log_str_rb[20];
+                    snprintf(rescuer_id_log_str_rb, sizeof(rescuer_id_log_str_rb), "Rescuer_%d", current_emergency_node->data.rescuer_dt[k_rollback]->id);
+                    log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_log_str_rb, "ROLLBACK: Stato reimpostato a IDLE a causa di conflitto.");
                 }
                 break; // Esci dal loop di assegnazione
             }
 
-            // 1. Aggiorna lo stato del soccorritore GLOBALE
+            // Assegna il PUNTATORE al soccorritore globale all'array dell'emergenza
+            current_emergency_node->data.rescuer_dt[i] = dt_global_to_assign;
+
+            // Cambia lo stato del soccorritore GLOBALE
             dt_global_to_assign->status = EN_ROUTE_TO_SCENE;
+            // La posizione del soccorritore globale (dt_global_to_assign->x, dt_global_to_assign->y)
+            // non cambia finché non arriva sulla scena.
 
-            // 2. MODIFICA 2: Copia la STRUTTURA del soccorritore globale
-            //    nella i-esima posizione dell'array dell'emergenza.
-            //    Nota: dt_global_to_assign->status è già EN_ROUTE_TO_SCENE qui.
-            current_emergency_node->data.rescuer_dt[i] = *dt_global_to_assign; // COPIA LA STRUTTURA
-
-            char rescuer_id_str[20];
-            snprintf(rescuer_id_str, sizeof(rescuer_id_str), "Rescuer_%d", dt_global_to_assign->id);
-            sprintf(log_msg_buffer, "Soccorritore ID %d ('%s') assegnato a Emergenza %s. Stato GLOBALE -> EN_ROUTE_TO_SCENE. Dati copiati in emergenza.",
+            char rescuer_id_log_str[20];
+            snprintf(rescuer_id_log_str, sizeof(rescuer_id_log_str), "Rescuer_%d", dt_global_to_assign->id);
+            sprintf(log_msg_buffer, "Soccorritore ID %d (Tipo: '%s') assegnato a Emergenza %s. Stato GLOBALE -> EN_ROUTE_TO_SCENE.",
                     dt_global_to_assign->id, dt_global_to_assign->rescuer->rescuer_type_name, emergency_id_str);
-            log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_str, log_msg_buffer);
+            log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_log_str, log_msg_buffer);
         }
         mtx_unlock(&digital_twins_array_mutex);
         // --- Fine Blocco Critico ---
 
-        free(selected_rescuers); // Non serve più l'array temporaneo
+        // L'array temporaneo selected_rescuers può essere liberato ora,
+        // dato che i puntatori rilevanti sono stati copiati in current_emergency_node->data.rescuer_dt
+        if (selected_rescuers) { // Controllo per sicurezza, anche se dovrebbe sempre esistere qui
+            free(selected_rescuers);
+            selected_rescuers = NULL; // Buona pratica
+        }
+
 
         if (assignment_conflict) {
-            // L'assegnazione è fallita all'ultimo secondo
-            // L'array nell'emergenza contiene copie parziali (o nessuna se conflitto al primo), ma va liberato.
-            free(current_emergency_node->data.rescuer_dt);
+            // L'assegnazione è fallita all'ultimo secondo a causa di un conflitto.
+            // Libera l'array di puntatori che era stato allocato per l'emergenza.
+            // I soccorritori globali coinvolti nel tentativo (fino al conflitto) sono già stati riportati a IDLE.
+            if (current_emergency_node->data.rescuer_dt != NULL) {
+                free(current_emergency_node->data.rescuer_dt);
+                current_emergency_node->data.rescuer_dt = NULL;
+            }
+            current_emergency_node->data.status = TIMEOUT; // O WAITING se vuoi che venga ritentata, ma TIMEOUT è più semplice
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a TIMEOUT (conflitto durante assegnazione).");
+            free(current_emergency_node);
+            current_emergency_node = NULL;
+            continue; // Prova con la prossima emergenza
+        }
+                
+
+        // Assegnazione completata con successo!
+        current_emergency_node->data.resquer_cont = total_rescuers_needed; // Salva il numero di soccorritori effettivamente puntati
+        current_emergency_node->data.status = ASSIGNED;
+        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a ASSIGNED.");
+
+        // --- GESTIONE ATTIVA DELL'EMERGENZA ---
+
+        
+    
+        
+
+
+        // --- GESTIONE ATTIVA DELL'EMERGENZA ---
+
+        // 5. Simulazione Viaggio Soccorritori e Arrivo sulla Scena
+        sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Inizio simulazione viaggio soccorritori.",
+                thread_id_for_log, emergency_id_str);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+
+        // Array per tracciare i tempi di arrivo individuali e se un soccorritore è ON_SCENE
+        // Questo presuppone che rescuer_dt sia già stato allocato con total_rescuers_needed
+        double* individual_arrival_times = (double*)calloc(current_emergency_node->data.resquer_cont, sizeof(double));
+        bool* is_on_scene = (bool*)calloc(current_emergency_node->data.resquer_cont, sizeof(bool));
+
+        if (!individual_arrival_times || !is_on_scene) {
+            sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Fallimento allocazione per tempi di arrivo/stato scena.", thread_id_for_log, emergency_id_str);
+            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_str, log_msg_buffer);
+            // Gestione errore: Marcare emergenza come CANCELED/TIMEOUT e pulire
+            current_emergency_node->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (malloc fallito per simulazione).");
+            
+            // Rollback stato soccorritori a IDLE (se possibile, altrimenti si rischia deadlock se altri li aspettano)
+            mtx_lock(&digital_twins_array_mutex);
+            for (int k_rb = 0; k_rb < current_emergency_node->data.resquer_cont; ++k_rb) {
+                if (current_emergency_node->data.rescuer_dt[k_rb] != NULL) { // Verifica puntatore
+                     current_emergency_node->data.rescuer_dt[k_rb]->status = IDLE;
+                     // Log del rollback opzionale
+                }
+            }
+            mtx_unlock(&digital_twins_array_mutex);
+
+            if (individual_arrival_times) free(individual_arrival_times);
+            if (is_on_scene) free(is_on_scene);
+            if (current_emergency_node->data.rescuer_dt) free(current_emergency_node->data.rescuer_dt);
             current_emergency_node->data.rescuer_dt = NULL;
-            current_emergency_node->data.status = TIMEOUT;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a TIMEOUT (conflitto assegnazione).");
+            free(current_emergency_node);
+            current_emergency_node = NULL;
+            continue; // Vai alla prossima emergenza
+        }
+
+
+        time_t simulation_start_time = time(NULL);
+        double overall_max_arrival_time = 0.0;
+
+        for (int i = 0; i < current_emergency_node->data.resquer_cont; ++i) {
+            rescuer_digital_twin_t *dt = current_emergency_node->data.rescuer_dt[i];
+            int distance = abs(dt->x - current_emergency_node->data.x) + abs(dt->y - current_emergency_node->data.y);
+            individual_arrival_times[i] = (dt->rescuer->speed > 0) ? ceil((double)distance / dt->rescuer->speed) : -1.0;
+            is_on_scene[i] = false;
+
+            if (individual_arrival_times[i] < 0) { // Velocità 0 o errore
+                sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Soccorritore ID %d ha velocità invalida durante simulazione viaggio. Impossibile procedere.",
+                        thread_id_for_log, emergency_id_str, dt->id);
+                log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_str, log_msg_buffer);
+                // Questo è un errore grave, l'emergenza non può essere gestita
+                assignment_possible = false; // Riutilizziamo questo flag per indicare fallimento simulazione
+                break;
+            }
+            if (individual_arrival_times[i] > overall_max_arrival_time) {
+                overall_max_arrival_time = individual_arrival_times[i];
+            }
+        }
+        
+        if (!assignment_possible) { // Se c'è stato un errore con le velocità
+            current_emergency_node->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (errore velocità soccorritore).");
+            // Rollback stato soccorritori a IDLE
+            mtx_lock(&digital_twins_array_mutex);
+            for (int k_rb = 0; k_rb < current_emergency_node->data.resquer_cont; ++k_rb) {
+                 if (current_emergency_node->data.rescuer_dt[k_rb] != NULL) {
+                    current_emergency_node->data.rescuer_dt[k_rb]->status = IDLE;
+                 }
+            }
+            mtx_unlock(&digital_twins_array_mutex);
+
+            free(individual_arrival_times);
+            free(is_on_scene);
+            if (current_emergency_node->data.rescuer_dt) free(current_emergency_node->data.rescuer_dt);
+            current_emergency_node->data.rescuer_dt = NULL;
             free(current_emergency_node);
             current_emergency_node = NULL;
             continue;
         }
+ 
+         
+         
+
+        // Ciclo di simulazione del tempo, un secondo alla volta, fino a overall_max_arrival_time
+        // per gestire gli arrivi scaglionati e il check dello shutdown_flag
+        int rescuers_on_scene_count = 0;
+        for (double t = 0; t < overall_max_arrival_time; t += 1.0) {
+            if (shutdown_flag) {
+                sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Shutdown richiesto durante viaggio soccorritori.",
+                        thread_id_for_log, emergency_id_str);
+                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+                assignment_possible = false; // Indica che non si prosegue
+                break;
+            }
+
+            thrd_sleep(&(struct timespec){.tv_sec = 1, .tv_nsec = 0}, NULL); // Dormi 1 secondo
+
+            // Controlla se qualche soccorritore è arrivato in questo secondo
+            for (int i = 0; i < current_emergency_node->data.resquer_cont; ++i) {
+                if (!is_on_scene[i] && (t + 1.0) >= individual_arrival_times[i]) {
+                    // Questo soccorritore è arrivato
+                    is_on_scene[i] = true;
+                    rescuers_on_scene_count++;
+                    rescuer_digital_twin_t *dt_arrived = current_emergency_node->data.rescuer_dt[i];
+
+                    mtx_lock(&digital_twins_array_mutex);
+                    dt_arrived->status = ON_SCENE;
+                    // Aggiorna la posizione del DT a quella della scena dell'emergenza
+                    dt_arrived->x = current_emergency_node->data.x;
+                    dt_arrived->y = current_emergency_node->data.y;
+                    mtx_unlock(&digital_twins_array_mutex);
+
+                    char rescuer_id_log_str[20];
+                    snprintf(rescuer_id_log_str, sizeof(rescuer_id_log_str), "Rescuer_%d", dt_arrived->id);
+                    sprintf(log_msg_buffer, "Soccorritore ID %d ('%s') arrivato a Emergenza %s. Stato -> ON_SCENE. Posizione aggiornata a (%d,%d).",
+                            dt_arrived->id, dt_arrived->rescuer->rescuer_type_name, emergency_id_str, dt_arrived->x, dt_arrived->y);
+                    log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_log_str, log_msg_buffer);
+                }
+            }
+
+            if (rescuers_on_scene_count == current_emergency_node->data.resquer_cont) {
+                break; // Tutti i soccorritori sono arrivati, esci dal loop di attesa
+            }
+        } // Fine ciclo simulazione viaggio
+
+        free(individual_arrival_times); // Non serve più
+
+        if (!assignment_possible || shutdown_flag) { // Se shutdown o errore precedente
+            current_emergency_node->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (shutdown o errore durante viaggio).");
+            // Rollback: manda i soccorritori (che potrebbero essere EN_ROUTE o ON_SCENE) a IDLE
+            mtx_lock(&digital_twins_array_mutex);
+            for (int k_rb = 0; k_rb < current_emergency_node->data.resquer_cont; ++k_rb) {
+                 if (current_emergency_node->data.rescuer_dt[k_rb] != NULL) {
+                    current_emergency_node->data.rescuer_dt[k_rb]->status = IDLE; // O RETURNING_TO_BASE per più realismo
+                    // Log rollback opzionale
+                 }
+            }
+            mtx_unlock(&digital_twins_array_mutex);
+            
+            free(is_on_scene);
+            if (current_emergency_node->data.rescuer_dt) free(current_emergency_node->data.rescuer_dt);
+            current_emergency_node->data.rescuer_dt = NULL;
+            free(current_emergency_node);
+            current_emergency_node = NULL;
+            continue;
+        }
+
+        // A questo punto, tutti i soccorritori *dovrebbero* essere ON_SCENE
+        // Verifica finale
+        if (rescuers_on_scene_count < current_emergency_node->data.resquer_cont) {
+             sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Errore logico: Non tutti i soccorritori sono ON_SCENE dopo la simulazione viaggio.",
+                        thread_id_for_log, emergency_id_str);
+             log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_str, log_msg_buffer);
+             // Stessa logica di cleanup di shutdown/errore
+            current_emergency_node->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (errore logico arrivi).");
+            mtx_lock(&digital_twins_array_mutex);
+            for (int k_rb = 0; k_rb < current_emergency_node->data.resquer_cont; ++k_rb) {
+                 if (current_emergency_node->data.rescuer_dt[k_rb] != NULL) {
+                    current_emergency_node->data.rescuer_dt[k_rb]->status = IDLE;
+                 }
+            }
+            mtx_unlock(&digital_twins_array_mutex);
+            free(is_on_scene);
+            if (current_emergency_node->data.rescuer_dt) free(current_emergency_node->data.rescuer_dt);
+            current_emergency_node->data.rescuer_dt = NULL;
+            free(current_emergency_node);
+            current_emergency_node = NULL;
+            continue;
+        }
+
+
+        // Tutti i soccorritori sono ON_SCENE, l'emergenza passa a IN_PROGRESS
+        current_emergency_node->data.status = IN_PROGRESS;
+        sprintf(log_msg_buffer, "Tutti i %d soccorritori arrivati. Emergenza %s Stato -> IN_PROGRESS.",
+                rescuers_on_scene_count, emergency_id_str);
+        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, log_msg_buffer);
+
+
+        // 6. Simulazione Gestione Emergenza (Lavoro sulla Scena)
+        double max_time_to_manage = 0;
+        for (int i = 0; i < current_emergency_node->data.type->rescuer_required_number; ++i) {
+            // Nota: stiamo iterando sui *tipi* richiesti, non sui *soccorritori istanziati*
+            // Questo assume che e_type->rescuers sia l'array delle richieste originali per il tipo
+            if ((double)current_emergency_node->data.type->rescuers[i].time_to_manage > max_time_to_manage) {
+                max_time_to_manage = (double)current_emergency_node->data.type->rescuers[i].time_to_manage;
+            }
+        }
+
+        sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Inizio gestione sulla scena. Tempo stimato: %.0f sec.",
+                thread_id_for_log, emergency_id_str, max_time_to_manage);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+
+
+
         
+        // Simulazione tempo di gestione, controllando shutdown_flag
+        for (double t_manage = 0; t_manage < max_time_to_manage; t_manage += 1.0) {
+            if (shutdown_flag) {
+                sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Shutdown richiesto durante gestione sulla scena.",
+                        thread_id_for_log, emergency_id_str);
+                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+                assignment_possible = false; // Indica che non si prosegue
+                break;
+            }
+            thrd_sleep(&(struct timespec){.tv_sec = 1, .tv_nsec = 0}, NULL);
+        }
 
-        // Assegnazione completata con successo!
-        current_emergency_node->data.resquer_cont = total_rescuers_needed;
-        current_emergency_node->data.status = ASSIGNED;
-        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a ASSIGNED.");
+        if (!assignment_possible || shutdown_flag) { // Se shutdown
+            current_emergency_node->data.status = CANCELED;
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a CANCELED (shutdown durante gestione).");
+            // Rollback: manda i soccorritori a IDLE (o RETURNING_TO_BASE)
+            mtx_lock(&digital_twins_array_mutex);
+            for (int k_rb = 0; k_rb < current_emergency_node->data.resquer_cont; ++k_rb) {
+                 if (current_emergency_node->data.rescuer_dt[k_rb] != NULL) {
+                    current_emergency_node->data.rescuer_dt[k_rb]->status = IDLE;
+                 }
+            }
+            mtx_unlock(&digital_twins_array_mutex);
 
-        // --- FINE DELLA PARTE TODO SPECIFICA PER L'ASSEGNAZIONE ---
+            free(is_on_scene);
+            if (current_emergency_node->data.rescuer_dt) free(current_emergency_node->data.rescuer_dt);
+            current_emergency_node->data.rescuer_dt = NULL;
+            free(current_emergency_node);
+            current_emergency_node = NULL;
+            continue;
+        }
+
+        // Gestione completata
+        current_emergency_node->data.status = COMPLETED;
+        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Stato emergenza impostato a COMPLETED.");
+
+        mtx_lock(&digital_twins_array_mutex);
+        for (int i = 0; i < current_emergency_node->data.resquer_cont; ++i) {
+            rescuer_digital_twin_t *dt_managed = current_emergency_node->data.rescuer_dt[i];
+            dt_managed->status = RETURNING_TO_BASE;
+
+            char rescuer_id_log_str[20];
+            snprintf(rescuer_id_log_str, sizeof(rescuer_id_log_str), "Rescuer_%d", dt_managed->id);
+            sprintf(log_msg_buffer, "Soccorritore ID %d ('%s') per Emergenza %s ha completato lavoro. Stato -> RETURNING_TO_BASE.",
+                    dt_managed->id, dt_managed->rescuer->rescuer_type_name, emergency_id_str);
+            log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_log_str, log_msg_buffer);
+        }
+        mtx_unlock(&digital_twins_array_mutex);
+
+
+        // 7. Simulazione Ritorno alla Base
+        sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Inizio simulazione ritorno soccorritori alla base.",
+                thread_id_for_log, emergency_id_str);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+
+        double overall_max_return_time = 0.0;
+        // Riusa is_on_scene come is_at_base (o crea un nuovo array bool)
+        for(int i=0; i < current_emergency_node->data.resquer_cont; ++i) is_on_scene[i] = false; // Resetta per usarlo come "is_at_base"
+
+        for (int i = 0; i < current_emergency_node->data.resquer_cont; ++i) {
+            rescuer_digital_twin_t *dt = current_emergency_node->data.rescuer_dt[i];
+            // La posizione corrente del DT è la scena dell'emergenza
+            int distance_to_base = abs(dt->x - dt->rescuer->x) + abs(dt->y - dt->rescuer->y);
+            double time_to_return = (dt->rescuer->speed > 0) ? ceil((double)distance_to_base / dt->rescuer->speed) : 0; // Se velocità 0, ritorno istantaneo (o gestisci errore)
+            // Salva il tempo di ritorno per questo soccorritore (potresti usare individual_arrival_times se l'hai liberato troppo presto)
+            // Per ora, lo ricalcoliamo nel loop di simulazione sotto.
+            if (time_to_return > overall_max_return_time) {
+                overall_max_return_time = time_to_return;
+            }
+        }
+        
+        int rescuers_at_base_count = 0;
+        for (double t_return = 0; t_return < overall_max_return_time; t_return += 1.0) {
+             if (shutdown_flag) {
+                sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Shutdown richiesto durante ritorno soccorritori.",
+                        thread_id_for_log, emergency_id_str);
+                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+                assignment_possible = false; // Indica che non si prosegue
+                break;
+            }
+            thrd_sleep(&(struct timespec){.tv_sec = 1, .tv_nsec = 0}, NULL);
+
+            for (int i = 0; i < current_emergency_node->data.resquer_cont; ++i) {
+                if (!is_on_scene[i]) { // is_on_scene ora significa "is_at_base"
+                    rescuer_digital_twin_t *dt_returning = current_emergency_node->data.rescuer_dt[i];
+                    int dist_ret = abs(dt_returning->x - dt_returning->rescuer->x) + abs(dt_returning->y - dt_returning->rescuer->y);
+                    double current_dt_return_time = (dt_returning->rescuer->speed > 0) ? ceil((double)dist_ret / dt_returning->rescuer->speed) : 0;
+
+                    if ((t_return + 1.0) >= current_dt_return_time) {
+                        is_on_scene[i] = true; // Marcato come "at_base"
+                        rescuers_at_base_count++;
+
+                        mtx_lock(&digital_twins_array_mutex);
+                        dt_returning->status = IDLE;
+                        // Ripristina la posizione del DT alla sua base
+                        dt_returning->x = dt_returning->rescuer->x;
+                        dt_returning->y = dt_returning->rescuer->y;
+                        mtx_unlock(&digital_twins_array_mutex);
+
+                        char rescuer_id_log_str[20];
+                        snprintf(rescuer_id_log_str, sizeof(rescuer_id_log_str), "Rescuer_%d", dt_returning->id);
+                        sprintf(log_msg_buffer, "Soccorritore ID %d ('%s') tornato alla base da Emergenza %s. Stato -> IDLE. Posizione aggiornata a (%d,%d).",
+                                dt_returning->id, dt_returning->rescuer->rescuer_type_name, emergency_id_str, dt_returning->x, dt_returning->y);
+                        log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_log_str, log_msg_buffer);
+                    }
+                }
+            }
+            if (rescuers_at_base_count == current_emergency_node->data.resquer_cont) {
+                break; 
+            }
+        } // Fine ciclo simulazione ritorno
+
+
+        free(is_on_scene); // Libera l'array (usato come is_at_base)
+
+        if (!assignment_possible || shutdown_flag) { // Se shutdown durante ritorno
+             // I soccorritori potrebbero essere in RETURNING_TO_BASE o già IDLE.
+             // Per sicurezza, assicurati che tutti siano IDLE e alla base.
+            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_str, "Emergenza gestita ma shutdown durante ritorno soccorritori.");
+            mtx_lock(&digital_twins_array_mutex);
+            for (int k_rb = 0; k_rb < current_emergency_node->data.resquer_cont; ++k_rb) {
+                 if (current_emergency_node->data.rescuer_dt[k_rb] != NULL) {
+                    rescuer_digital_twin_t *dt_final = current_emergency_node->data.rescuer_dt[k_rb];
+                    dt_final->status = IDLE;
+                    dt_final->x = dt_final->rescuer->x;
+                    dt_final->y = dt_final->rescuer->y;
+                    // Log opzionale del forzato IDLE
+                 }
+            }
+            mtx_unlock(&digital_twins_array_mutex);
+            // Il nodo emergenza verrà liberato comunque sotto
+        }
+
+
+        sprintf(log_msg_buffer, "Thread #%d: Emergenza %s - Gestione completata, soccorritori tornati alla base.",
+                thread_id_for_log, emergency_id_str);
+        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_str, log_msg_buffer);
+
+        // Pulizia finale per questa emergenza
+        if (current_emergency_node->data.rescuer_dt != NULL) {
+             free(current_emergency_node->data.rescuer_dt);
+             current_emergency_node->data.rescuer_dt = NULL;
+        }
+        free(current_emergency_node);
+        current_emergency_node = NULL;
+
+        // Fine del blocco while (!shutdown_flag) nel thread handler
+        // Il thread prenderà la prossima emergenza o attenderà
+         
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         // Da qui in poi inizia la gestione del ciclo di vita dell'emergenza
         // (Simulazione viaggio, arrivo, lavoro, ritorno)
@@ -560,13 +952,6 @@ int emergency_handler_thread_func(void *arg) {
     free(thread_args);
     return 0;
 }
-
-
-
-
-
-
-
 
 
 
@@ -622,6 +1007,7 @@ int main(int argc, char *argv[]) {
         cleanup_before_exit(true, false, false, false, false);
         return EXIT_FAILURE;
     }
+
     config_fully_loaded = true;
     log_message(LOG_EVENT_GENERAL_INFO, "MAIN", "Tutta la configurazione è stata letta con successo.");
 

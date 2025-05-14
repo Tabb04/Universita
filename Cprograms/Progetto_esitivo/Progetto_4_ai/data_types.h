@@ -69,7 +69,7 @@ typedef struct{
     int y;
     time_t time;
     int resquer_cont;
-    rescuer_digital_twin_t * rescuer_dt;
+    rescuer_digital_twin_t ** rescuer_dt;
 }emergency_t;
 
 
