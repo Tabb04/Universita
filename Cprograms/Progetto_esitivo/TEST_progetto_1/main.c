@@ -58,8 +58,10 @@ mqd_t mq_desc_globale = (mqd_t)-1;   //inizializzazione a valore non valido seco
 
 
 static void gestore_segnali(int sig){
-    const char* msg = "Ctrl+C ricevuto. Inizio terminazione\n";
-    write(STDERR_FILENO, msg, strlen(msg)); //async safe in teoria
+    (void)sig;
+    const char* msg = "Ctrl+c rilevato, chiusura\n"; 
+    
+    (void)write(STDERR_FILENO, msg, strlen(msg));   //per togliere warning
     shutdown_flag = true;
 }
 
@@ -233,6 +235,10 @@ int message_queue_ascoltatore_func(){
 
 }
 
+typedef struct {
+    rescuer_digital_twin_t *dt;
+    double time_to_arrive;
+} rescuer_candidate_t;  //usata in gestore emergenze per gestire i candidati
 
 
 //funzione per qsort dei candidati
@@ -252,10 +258,6 @@ static int sort_candidati(const void* a, const void* b){
 
 
 
-typedef struct {
-    rescuer_digital_twin_t *dt;
-    double time_to_arrive;
-} rescuer_candidate_t;  //usata in gestore emergenze per gestire i candidati
 
 
 
@@ -595,7 +597,7 @@ int gestore_emergenze_fun(void* arg){
         }
 
         //tempo per simulare
-        time_t inizio_simulazione = time(NULL);
+        //time_t inizio_simulazione = time(NULL);
         double tempo_arrivo_tot_max = 0.0;
 
         for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
@@ -946,7 +948,8 @@ int gestore_emergenze_fun(void* arg){
 
 
 
-int main(int argc, char* argv[]){
+int main(void){
+
     char log_msg_buffer[LINE_LENGTH + 250];
 
     //inizializzo logger
@@ -1109,7 +1112,7 @@ int main(int argc, char* argv[]){
 
     int thrd_ret;
     sprintf(log_msg_buffer, "Fallita inizializzazione del mutex per coda emergenze");
-    LOG_SCALL_THRDC(thrd_ret, mtx_init(&mutex_emergenze_attesa, mtx_plain), LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer, config_fully_loaded, digital_twins_inizializzati, message_queue_open, false, false);
+    LOG_SCALL_THRDSC(thrd_ret, mtx_init(&mutex_emergenze_attesa, mtx_plain), LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer, config_fully_loaded, digital_twins_inizializzati, message_queue_open, false, false);
     //questa macro dunque ma tmx_init, guarda se non è thrd_success e nel caso stampa il log_msg_buffer, pulisce e fa EXIT_FAILURE
 
     //in questo punto dovrei fare la stessa cosa con cnd_init ma il problema è che non posso
@@ -1234,13 +1237,18 @@ int main(int argc, char* argv[]){
         sprintf(log_msg_buffer, "Thread gestore #%d avviato", i);
         log_message(LOG_EVENT_GENERAL_INFO, "Main", log_msg_buffer);
     }
+
+
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Tutti i thread gestori avviati");
     
+        while (!shutdown_flag) {
+        //sleep interrompibile da segnali
+        struct timespec main_sleep_ts = {.tv_sec = 1, .tv_nsec = 0};
+        thrd_sleep(&main_sleep_ts, NULL);
+    }
 
-    
-    //chiusura gestori
+
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Invio shutdown ai tread");
-    shutdown_flag = true;
     cnd_broadcast(&cond_nuova_emergenza);   //sveglio i gestori
 
     

@@ -1,0 +1,126 @@
+[1747307453] (SYSTEM) [INFO] Logger inizializzato
+[1747307453] (Main) [INFO] Sistema di Emergenze avviato
+[1747307453] (Main) [INFO] Gestore per SIGINT (Ctrl+C) registrato
+[1747307453] (Main) [INFO] Inizio configurazione ambiente da env.conf
+[1747307453] (env.conf) [FILE_PARSING] File aperto con successo
+[1747307453] (env.conf) [FILE_PARSING] Coda trovata a riga 1: 'emergenze674556'
+[1747307453] (env.conf) [FILE_PARSING] Altezza trovata a riga 2: '300'
+[1747307453] (env.conf) [FILE_PARSING] Ampiezza trovata a riga 3: '400'
+[1747307453] (env.conf) [FILE_PARSING] Parsing completato: Nome coda=emergenze674556, Altezza=300, Larghezza=400
+[1747307453] (Main) [INFO] Inizio configurazione soccorritori da rescuers.conf
+[1747307453] (rescuers.conf) [FILE_PARSING] Tentativo di apertura file 'rescuers.conf'
+[1747307453] (rescuers.conf) [FILE_PARSING] File aperto con successo
+[1747307453] (Primo passaggio: Conto pontenziali tipi di soccorritori) [FILE_PARSING] Errore fopen apertura file 'rescuers.conf': Success
+[1747307453] (rescuers.conf) [FILE_PARSING] Primo passsaggio: Completato, trovati potenziali 3 tipi di soccorritori
+[1747307453] (rescuers.conf) [FILE_PARSING] Allocato spazio per 3 soccorritori
+[1747307453] (rescuers.conf) [FILE_PARSING] Allocato instances_per_rescuer_type per 3 interi.
+[1747307453] (rescuers.conf) [FILE_PARSING] Secondo passsaggio: Estraggo dati
+[1747307453] (rescuers.conf) [FILE_PARSING] Estratto soccorritore da riga 1: Nome=Pompieri, Velocità=2, Base=(100,200). Numero unità=5
+[1747307453] (rescuers.conf) [FILE_PARSING] Estratto soccorritore da riga 2: Nome=Ambulanza, Velocità=4, Base=(150,250). Numero unità=25
+[1747307453] (rescuers.conf) [FILE_PARSING] Estratto soccorritore da riga 3: Nome=Polizia, Velocità=3, Base=(50,50). Numero unità=10
+[1747307453] (rescuers.conf) [FILE_PARSING] Parsing dei soccorritori completato. Letti 3 tipi di soccorritori, vanno creati totali 40 gemelli virtuali
+[1747307453] (Main) [INFO] Inizio configurazione emergenze da emergency_types.env
+[1747307453] (emergency_types.conf) [FILE_PARSING] Tentativo apertura del file 'emergency_types.conf'
+[1747307453] (emergency_types.conf) [FILE_PARSING] File aperto con successo
+[1747307453] (Primo passaggio: Conto pontenziali tipi di emergenze) [FILE_PARSING] Errore fopen apertura file 'emergency_types.conf': Success
+[1747307453] (emergency_types.conf) [FILE_PARSING] Primo passsaggio: Completato, trovati potenziali 4 tipi di emergenze
+[1747307453] (emergency_types.conf) [FILE_PARSING] Allocato spazio per 4 emergenze
+[1747307453] (emergency_types.conf) [FILE_PARSING] Secondo passsaggio: Estraggo dati
+[1747307453] (emergency_types.conf) [FILE_PARSING] Caricata riga n* 1: Nome=Allagamento, Priorità=1, Soccorsi richiesti=2
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Pompieri, Numero unità=1, Tempo di gestine=5
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Ambulanza, Numero unità=1, Tempo di gestine=2
+[1747307453] (emergency_types.conf) [FILE_PARSING] Caricata riga n* 2: Nome=Incendio, Priorità=2, Soccorsi richiesti=2
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Pompieri, Numero unità=2, Tempo di gestine=8
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Ambulanza, Numero unità=3, Tempo di gestine=1
+[1747307453] (emergency_types.conf) [FILE_PARSING] Caricata riga n* 3: Nome=Sommossa, Priorità=2, Soccorsi richiesti=2
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Polizia, Numero unità=3, Tempo di gestine=8
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Ambulanza, Numero unità=2, Tempo di gestine=4
+[1747307453] (emergency_types.conf) [FILE_PARSING] Caricata riga n* 4: Nome=IncidenteStradale, Priorità=1, Soccorsi richiesti=3
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Ambulanza, Numero unità=2, Tempo di gestine=10
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Polizia, Numero unità=1, Tempo di gestine=5
+[1747307453] (emergency_types.conf) [FILE_PARSING] Soccorso=Pompieri, Numero unità=1, Tempo di gestine=3
+[1747307453] (emergency_types.conf) [FILE_PARSING] Completato parsing. Letti 4 emergenze valide
+[1747307453] (Main) [INFO] Configurazione avvenuta con successo
+[1747307453] (Main) [INFO] Allocato spazio per 40 gemelli digitali
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=1, Tipo=Pompieri
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=2, Tipo=Pompieri
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=3, Tipo=Pompieri
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=4, Tipo=Pompieri
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=5, Tipo=Pompieri
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=6, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=7, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=8, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=9, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=10, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=11, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=12, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=13, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=14, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=15, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=16, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=17, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=18, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=19, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=20, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=21, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=22, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=23, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=24, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=25, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=26, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=27, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=28, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=29, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=30, Tipo=Ambulanza
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=31, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=32, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=33, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=34, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=35, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=36, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=37, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=38, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=39, Tipo=Polizia
+[1747307453] (Main) [INFO] Gemello digitale creato, ID=40, Tipo=Polizia
+[1747307453] (Main) [INFO] Creati correttamente 40 gemelli
+[1747307453] (Main) [INFO] Inizializzazione sistemi di sincronizzazione
+[1747307453] (Main) [INFO] Sistemi di sincronizzazione inizializzati
+[1747307453] (Main) [INFO] Mutex per array gemelli digitali inizializzata
+[1747307453] (Message queue) [MESSAGE_QUEUE] Apertura coda messaggi '/emergenze674556' in corso
+[1747307453] (Main) [MESSAGE_QUEUE] Coda messaggi aperta
+[1747307453] (Main) [INFO] Creazione thread ascoltatore delal coda messaggi
+[1747307453] (Main) [INFO] Thread ascoltatore creato
+[1747307453] (Main) [INFO] Creazione gestori emergenze
+[1747307453] (Thread ascoltatore) [INFO] Thread ascoltatore avviato
+[1747307453] (Main) [INFO] Thread gestore #0 avviato
+[1747307453] (Main) [INFO] Thread gestore #1 avviato
+[1747307453] (Thread Gestore) [INFO] Thread Gestore #0 avviato.
+[1747307453] (Main) [INFO] Thread gestore #2 avviato
+[1747307453] (Main) [INFO] Tutti i thread gestori avviati
+[1747307453] (Thread Gestore) [INFO] Thread Gestore #1 avviato.
+[1747307453] (Thread Gestore) [INFO] Thread Gestore #2 avviato.
+[1747307456] (Main) [INFO] Invio shutdown ai tread
+[1747307456] (Thread gestore) [INFO] Thread Gestore Emergenze #2 in terminazione.
+[1747307456] (Thread gestore) [INFO] Thread Gestore Emergenze #1 in terminazione.
+[1747307456] (Thread gestore) [INFO] Thread Gestore Emergenze #0 in terminazione.
+[1747307457] (Thread ascoltatore) [INFO] Shutdown flag rilevato dopo mq_timedreceive quindi termino
+[1747307457] (Thread ascoltatore) [INFO] Thread ascoltatore in terminazione
+[1747307457] (Main) [INFO] Thread ascoltatore terminato: '0'
+[1747307457] (Main) [INFO] Thread gestore #0 terminato
+[1747307457] (Main) [INFO] Thread gestore #1 terminato
+[1747307457] (Main) [INFO] Thread gestore #2 terminato
+[1747307457] (Main) [INFO] Tutti i threadsono stati terminati
+[1747307457] (Main) [INFO] Pulizia risorse
+[1747307457] (Main_Shutdown) [MESSAGE_QUEUE] Unlink effettuata su '/emergenze674556'
+[1747307457] (Cleanup) [INFO] Inizio pulizia
+[1747307457] (Cleanup) [MESSAGE_QUEUE] Coda messaggi chiusa
+[1747307457] (Cleanup) [INFO] Deallocato array gemelli digitali
+[1747307457] (System_config) [INFO] Inizio deallocazione system_config
+[1747307457] (System_config) [INFO] Deallogati 3 tipi di soccorritori
+[1747307457] (System_config) [INFO] Deallocato instances_per_rescuer_type.
+[1747307457] (System_config) [INFO] Deallogati 4 tipi di emergenze
+[1747307457] (System_config) [INFO] Deallogazione system_config finita
+[1747307457] (Cleanup) [INFO] Distrutte mutexe cond_var
+[1747307457] (Cleanup) [INFO] Mutex per array dei gemelli digitali distrutto
+[1747307457] (Cleanup) [INFO] Pulizia compleatata
+[1747307457] (SYSTEM) [INFO] Logger in chiusura

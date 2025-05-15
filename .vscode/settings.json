@@ -1,6 +1,10 @@
 {
     "java.debug.settings.onBuildFailureProceed": true,
     "files.associations": {
-        "threads.h": "c"
+        "threads.h": "c",
+        "stat.h": "c",
+        "config1.h": "c",
+        "errno.h": "c",
+        "logger.h": "c"
     }
 }
