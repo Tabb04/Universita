@@ -105,7 +105,7 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
     //per primo faccio stesso passaggio di parse_rescuers dove conto i potenziali per 
     //allocare sufficiente memoria 
 
-    log_message(LOG_EVENT_FILE_PARSING, "Primo passaggio: Conto pontenziali tipi di emergenze", log_msg_buffer);
+    log_message(LOG_EVENT_FILE_PARSING, nome_file, "Primo passaggio: Conto pontenziali tipi di emergenze");
     while(fgets(riga, sizeof(riga), file)){
         riga_num_pass1++;
         

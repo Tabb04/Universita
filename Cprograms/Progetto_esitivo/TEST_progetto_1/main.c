@@ -32,8 +32,15 @@ long next_emergency_id = 1; //Contatore id per le emergenze
 //utilizzo una struttura per le emergenze che usa liste linkate
 typedef struct nodo_emergenza{
     emergency_t data;
+    char id_generato[64];
     struct nodo_emergenza *next;
 }emergency_node_t;
+
+//variabili per la generazione dell'id
+time_t ultimo_timestamp = 0;
+int    counter_id_gen = 0;
+mtx_t  mutex_generatore_id; // Mutex per proteggere l'accesso alle variabili sopra
+
 
 
 //struttura per passaggio dei parametri torna meglio così
@@ -56,6 +63,27 @@ volatile bool shutdown_flag = false;    //se true termino il thread
 //descrittore coda
 mqd_t mq_desc_globale = (mqd_t)-1;   //inizializzazione a valore non valido secondo
 
+void genera_id_func(char *buff, size_t buff_len) {
+    mtx_lock(&mutex_generatore_id);
+
+    time_t current_time = time(NULL);
+    if (current_time == ultimo_timestamp) {
+        counter_id_gen++;
+    } else {
+        ultimo_timestamp = current_time;
+        counter_id_gen = 0; // Resetta il contatore per il nuovo secondo
+    }
+    //copia il valore del contatore prima di sbloccare il mutex
+    //nel caso un altro thread modifichi counter_id_gen subito dopo
+    int id_suffix = counter_id_gen;
+
+    mtx_unlock(&mutex_generatore_id);
+
+    //formato ID: EMG_timestamp_secondi_contatore_nel_secondo
+    snprintf(buff, buff_len, "EMG_%ld_%d", (long)current_time, id_suffix);
+}
+
+
 
 static void gestore_segnali(int sig){
     (void)sig;
@@ -66,9 +94,7 @@ static void gestore_segnali(int sig){
 }
 
 
-
-
-void pulizia_e_uscita(bool config_loaded, bool digital_twins_loaded, bool mq_loaded, bool sync_loaded, bool mtx_loaded){
+void pulizia_e_uscita(bool config_loaded, bool digital_twins_loaded, bool mq_loaded, bool sync_loaded, bool mtx_loaded, bool id_mtx_loaded){
     
     log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Inizio pulizia");
     
@@ -98,6 +124,10 @@ void pulizia_e_uscita(bool config_loaded, bool digital_twins_loaded, bool mq_loa
         log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Mutex per array dei gemelli digitali distrutto");
     }
 
+    if(id_mtx_loaded){
+        mtx_destroy(&mutex_generatore_id);
+        log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Mutex per generatore ID distrutto");
+    }
 
     log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Pulizia compleatata");
     close_logger();
@@ -211,6 +241,7 @@ int message_queue_ascoltatore_func(){
         nodo_em->data.rescuer_dt = NULL;    //stesso
         nodo_em->next = NULL;               //devo vedere come è la coda
         
+        genera_id_func(nodo_em->id_generato, sizeof(nodo_em->id_generato));
 
         //aggiungo nodo alla coda (con mutex)
         mtx_lock(&mutex_emergenze_attesa);
@@ -222,7 +253,7 @@ int message_queue_ascoltatore_func(){
             lista_emergenze_attesa_coda = nodo_em;
         }
 
-        sprintf(log_msg_buffer, "Aggiunga nuova emergenza alla coda in WAITING. Tipo=%s, Posizione=(%d, %d)", nodo_em->data.type->emergency_desc, nodo_em->data.x, nodo_em->data.y);
+        sprintf(log_msg_buffer, "Aggiunga nuova emergenza alla coda in WAITING. Tipo=%s, Posizione=(%d, %d), ID=%s", nodo_em->data.type->emergency_desc, nodo_em->data.x, nodo_em->data.y, nodo_em->id_generato);
         log_message(LOG_EVENT_EMERGENCY_STATUS, "Coda attesa", log_msg_buffer);
         
         mtx_unlock(&mutex_emergenze_attesa);
@@ -304,15 +335,18 @@ int gestore_emergenze_fun(void* arg){
         mtx_unlock(&mutex_emergenze_attesa);
 
         emergency_type_t* em_type = current_nodo_emergency->data.type;   //puntatore al tipo dell'emergenza estratta
+       
+        /*
         long emergency_id_log = (long)current_nodo_emergency->data.time;
-        
-        
         char emergency_id_string[50];   //facilito logging id
         snprintf(emergency_id_string, sizeof(emergency_id_string), "Emergenza %ld", emergency_id_log);
+        */
+        char *id_emergenza_log = current_nodo_emergency->id_generato;
         
         //---------------
 
-        sprintf(log_msg_buffer, "Thread #%d, Inizio processamento emergenza %s: Tipo=%s, Posizione=(%d, %d), Tempo ricezione=%ld", thread_id_log, emergency_id_string, em_type->emergency_desc, current_nodo_emergency->data.x, current_nodo_emergency->data.y, (long)current_nodo_emergency->data.time);        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, log_msg_buffer);
+        sprintf(log_msg_buffer, "Thread #%d, Inizio processamento emergenza %s: Tipo=%s, Posizione=(%d, %d), Tempo ricezione=%ld", thread_id_log, id_emergenza_log, em_type->emergency_desc, current_nodo_emergency->data.x, current_nodo_emergency->data.y, (long)current_nodo_emergency->data.time);
+        log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, log_msg_buffer);
     
         //calcolo deadline
         time_t deadline = 0;
@@ -323,9 +357,9 @@ int gestore_emergenze_fun(void* arg){
         }
 
         if(deadline > 0){
-            sprintf(log_msg_buffer, "Thread #%d, calcolato deadline per emergenza %s: %ld secondi", thread_id_log, emergency_id_string, (long)deadline);
+            sprintf(log_msg_buffer, "Thread #%d, calcolato deadline per emergenza %s: %ld secondi", thread_id_log, id_emergenza_log, (long)deadline);
             //long perchè lo è data.time essendo time_t
-            log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+            log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
         }
 
         //struttura per selezione soccorritori
@@ -340,20 +374,20 @@ int gestore_emergenze_fun(void* arg){
         if(rescuers_necessari > 0){
             rescuers_selezionati = (rescuer_digital_twin_t**)malloc(rescuers_necessari * sizeof(rescuer_digital_twin_t *));
             if(!rescuers_selezionati){
-                sprintf(log_msg_buffer, "Thread #%d, Fallimento allocazione memoria per soccorritori di emergenza %s", thread_id_log, emergency_id_string);
-                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                sprintf(log_msg_buffer, "Thread #%d, Fallimento allocazione memoria per soccorritori di emergenza %s", thread_id_log, id_emergenza_log);
+                log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
                 //libero e continuo
                 current_nodo_emergency->data.status = CANCELED;
-                log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza CANCELED");
+                log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza CANCELED");
                 free(current_nodo_emergency);
            current_nodo_emergency = NULL;
                 continue;
             }
         }else{
-            sprintf(log_msg_buffer, "Thread #%d Nessun soccorritore richiesto per emergenza %s, possibile errore config", thread_id_log, emergency_id_string);
-            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+            sprintf(log_msg_buffer, "Thread #%d Nessun soccorritore richiesto per emergenza %s, possibile errore config", thread_id_log, id_emergenza_log);
+            log_message(LOG_EVENT_GENERAL_ERROR, id_emergenza_log, log_msg_buffer);
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza CANCELED");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza CANCELED");
             free(current_nodo_emergency);
             current_nodo_emergency = NULL;
             continue;
@@ -374,8 +408,8 @@ int gestore_emergenze_fun(void* arg){
             
             rescuer_candidate_t* candidati = (rescuer_candidate_t*)malloc(total_digital_twins_creati * sizeof(rescuer_candidate_t));
             if(!candidati){
-                sprintf(log_msg_buffer, "Thread #%d, Fallimento allocazione memoria per candidati soccorritori di emergenza %s", thread_id_log, emergency_id_string);
-                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                sprintf(log_msg_buffer, "Thread #%d, Fallimento allocazione memoria per candidati soccorritori di emergenza %s", thread_id_log, id_emergenza_log);
+                log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
                 possibile = false;
                 break;
             }
@@ -402,8 +436,8 @@ int gestore_emergenze_fun(void* arg){
                         candidati[count_candidati].time_to_arrive = tempo_arrivo;
                         count_candidati++;
                     }else{
-                        sprintf(log_msg_buffer, "Errore da Thread gestore #%d per emergenza %s. Soccorritore %s ha velocità <= 0", thread_id_log, emergency_id_string, gemello->rescuer->rescuer_type_name);
-                        log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+                        sprintf(log_msg_buffer, "Errore da Thread gestore #%d per emergenza %s. Soccorritore %s ha velocità <= 0", thread_id_log, id_emergenza_log, gemello->rescuer->rescuer_type_name);
+                        log_message(LOG_EVENT_GENERAL_ERROR, id_emergenza_log, log_msg_buffer);
                     }
                 }
             }
@@ -411,8 +445,8 @@ int gestore_emergenze_fun(void* arg){
             //sblocco l'array
 
             if(count_candidati < required_count){
-                sprintf(log_msg_buffer, "Errore Thread #%d per emergenza %s. Risorse insufficienti, trovati %d candidati IDLE per tipo '%s', ma necessari %d", thread_id_log, emergency_id_string, count_candidati, tipo_richiesto->rescuer_type_name, rescuers_necessari);
-                log_message(LOG_EVENT_ASSIGNMENT, emergency_id_string, log_msg_buffer);
+                sprintf(log_msg_buffer, "Errore Thread #%d per emergenza %s. Risorse insufficienti, trovati %d candidati IDLE per tipo '%s', ma necessari %d", thread_id_log, id_emergenza_log, count_candidati, tipo_richiesto->rescuer_type_name, rescuers_necessari);
+                log_message(LOG_EVENT_ASSIGNMENT, id_emergenza_log, log_msg_buffer);
                 possibile = false;
                 free(candidati);
                 break;
@@ -447,11 +481,21 @@ int gestore_emergenze_fun(void* arg){
             time_t tempo_stimato_arrivo = ora + (time_t)tempo_max_arrivo;
 
             if((deadline > 0) && (tempo_stimato_arrivo > deadline)){
-                sprintf(log_msg_buffer, "Errore Thread #%d per emergenza %s. TIMEOUT, tempo stimato supera deadline", thread_id_log, emergency_id_string);
-                log_message(LOG_EVENT_TIMEOUT, emergency_id_string, log_msg_buffer);
+                sprintf(log_msg_buffer, "Errore Thread #%d per emergenza %s. TIMEOUT, tempo stimato supera deadline", thread_id_log, id_emergenza_log);
+                log_message(LOG_EVENT_TIMEOUT, id_emergenza_log, log_msg_buffer);
                 current_nodo_emergency->data.status =  TIMEOUT;
-                log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a TIMEOUT, deadline non rispettato");
+                log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a TIMEOUT, deadline non rispettato");
+                
+                //pulizia
+                if(rescuers_selezionati){
+                    free(rescuers_selezionati);
+                    rescuers_selezionati = NULL;
+                }
+                free(current_nodo_emergency);
+                current_nodo_emergency = NULL;
+                continue; //prossima emergenza
             }
+
         }
 
         if(!possibile){
@@ -461,7 +505,7 @@ int gestore_emergenze_fun(void* arg){
             if(current_nodo_emergency->data.status != TIMEOUT){
                 //nel caso fosse uscito per un altro motivo
                 current_nodo_emergency->data.status = TIMEOUT;
-                log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a TIMEOUT)");
+                log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a TIMEOUT)");
             }
             free(current_nodo_emergency);
             current_nodo_emergency = NULL;
@@ -470,7 +514,7 @@ int gestore_emergenze_fun(void* arg){
 
         //ASSEGNAMENTO
         sprintf(log_msg_buffer, "Assegnamento effettuato, tempo previsto di arrivo %.0f secondi", tempo_max_arrivo);
-        log_message(LOG_EVENT_ASSIGNMENT, emergency_id_string, log_msg_buffer);
+        log_message(LOG_EVENT_ASSIGNMENT, id_emergenza_log, log_msg_buffer);
 
         //alloco array di puntatori nell'emergenza
         current_nodo_emergency->data.rescuer_dt = (rescuer_digital_twin_t **)malloc(rescuers_necessari * sizeof(rescuer_digital_twin_t *));
@@ -478,10 +522,10 @@ int gestore_emergenze_fun(void* arg){
 
             
             sprintf(log_msg_buffer, "Errore thread #%d, fallita malloc per assegnamento di soccorritori", thread_id_log);
-            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+            log_message(LOG_EVENT_GENERAL_ERROR, id_emergenza_log, log_msg_buffer);
 
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a CANCELED");
             free(current_nodo_emergency);
             current_nodo_emergency = NULL;
             if(rescuers_selezionati){
@@ -502,7 +546,7 @@ int gestore_emergenze_fun(void* arg){
 
                 //questo significa che un altro thread ha preso questo gemello nel frattempo
                 sprintf(log_msg_buffer, "Errore thread #%d, soccorritore ID=%d non è più idle", thread_id_log, gemello_da_assegnare->id);
-                log_message(LOG_EVENT_ASSIGNMENT, emergency_id_string, log_msg_buffer);
+                log_message(LOG_EVENT_ASSIGNMENT, id_emergenza_log, log_msg_buffer);
                 conflitto = true;
 
                 for(int k = 0; k<i; k++){
@@ -517,9 +561,9 @@ int gestore_emergenze_fun(void* arg){
             gemello_da_assegnare->status = EN_ROUTE_TO_SCENE;
 
 
-            char rescuer_id_string[30]; //stessa roba che con emergency_id_string
+            char rescuer_id_string[30]; //stessa roba che con id_emergenza_log
             snprintf(rescuer_id_string, sizeof(rescuer_id_string), "Soccorritore %d", gemello_da_assegnare->id);
-            sprintf(log_msg_buffer, "Soccorritore %d assegnato ad emergenza %s", gemello_da_assegnare->id, emergency_id_string);
+            sprintf(log_msg_buffer, "Soccorritore %d assegnato ad emergenza %s", gemello_da_assegnare->id, id_emergenza_log);
             log_message(LOG_EVENT_RESCUER_STATUS, rescuer_id_string, log_msg_buffer);
         }
         mtx_unlock(&mutex_array_gemelli);
@@ -538,7 +582,7 @@ int gestore_emergenze_fun(void* arg){
             }
 
             current_nodo_emergency->data.status = TIMEOUT;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Impostato stato emergenza TIMEOUT");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Impostato stato emergenza TIMEOUT");
             free(current_nodo_emergency);
             current_nodo_emergency = NULL;
             continue;
@@ -547,7 +591,7 @@ int gestore_emergenze_fun(void* arg){
         current_nodo_emergency->data.resquer_cont = rescuers_necessari;
         current_nodo_emergency->data.status = ASSIGNED;
         
-        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Impostato stato emergenza ASSIGNED");
+        log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Impostato stato emergenza ASSIGNED");
 
 
 
@@ -556,7 +600,7 @@ int gestore_emergenze_fun(void* arg){
         //per primo viaggio e arrivo all'emergenza
 
         sprintf(log_msg_buffer, "Thread #%d. Inizia viaggio dei soccorritori", thread_id_log);
-        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+        log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
 
         //prima voglio calcolare i tempi di arrivo individuali
         double* tempi_di_arrivo_individuali = (double*)calloc(current_nodo_emergency->data.resquer_cont, sizeof(double));
@@ -565,10 +609,10 @@ int gestore_emergenze_fun(void* arg){
 
         if(!tempi_di_arrivo_individuali || !sulla_scena){
             sprintf(log_msg_buffer, "Errore Thread #%d. Fallita allocazione per tempi di arrivo e/o bool su scena", thread_id_log);
-            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+            log_message(LOG_EVENT_GENERAL_ERROR, id_emergenza_log, log_msg_buffer);
 
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a CANCELED");
             
             //aggiorno i gemelli prima e rimetto a idle
             mtx_lock(&mutex_array_gemelli);
@@ -611,8 +655,8 @@ int gestore_emergenze_fun(void* arg){
             sulla_scena[i] = false;
             
             if(tempi_di_arrivo_individuali[i] < 0){
-                sprintf(log_msg_buffer, "Errore thread #%d per emergenza %s. Velocità invalida", thread_id_log, emergency_id_string);
-                log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+                sprintf(log_msg_buffer, "Errore thread #%d per emergenza %s. Velocità invalida", thread_id_log, id_emergenza_log);
+                log_message(LOG_EVENT_GENERAL_ERROR, id_emergenza_log, log_msg_buffer);
                 
                 //non è possibile gestire l'emergenza
                 possibile = false; //riuso sto flag
@@ -627,7 +671,7 @@ int gestore_emergenze_fun(void* arg){
 
         if(!possibile){
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a CANCELED");
             
             //faccio stessa cosa sui gemelli prima
             mtx_lock(&mutex_array_gemelli);
@@ -663,7 +707,7 @@ int gestore_emergenze_fun(void* arg){
         for(double i = 0; i<tempo_arrivo_tot_max; i += 1.0){    //si incrementa così il double
             if(shutdown_flag){
                 sprintf(log_msg_buffer, "Thread #%d, Richiesto shutdown durante viaggio soccorritori", thread_id_log);
-                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
                 possibile = false;
                 break;
             }
@@ -691,7 +735,7 @@ int gestore_emergenze_fun(void* arg){
 
                     char buf_soccorritore[30];  //loggare
                     snprintf(buf_soccorritore, sizeof(buf_soccorritore), "Soccorritore %d", gemello_arrivato->id);
-                    sprintf(log_msg_buffer, "Soccorritore con ID=%d '%s', Arrivato ad emergenza %s. Aggiorata posizione e stato", gemello_arrivato->id, gemello_arrivato->rescuer->rescuer_type_name, emergency_id_string);
+                    sprintf(log_msg_buffer, "Soccorritore con ID=%d '%s', Arrivato ad emergenza %s. Aggiorata posizione e stato", gemello_arrivato->id, gemello_arrivato->rescuer->rescuer_type_name, id_emergenza_log);
                     log_message(LOG_EVENT_RESCUER_STATUS, buf_soccorritore, log_msg_buffer);
                 }
             }
@@ -705,7 +749,7 @@ int gestore_emergenze_fun(void* arg){
 
         if(!possibile || shutdown_flag){
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a CANCELED");
 
             //pulisco i soccorritori EN_ROUTE o ON_SCENE
 
@@ -731,11 +775,11 @@ int gestore_emergenze_fun(void* arg){
         //controllo comunque
         if (rescuer_arrivati < current_nodo_emergency->data.resquer_cont) {
             sprintf(log_msg_buffer, "Errore thread #%d, non sono arrivati tutti i soccorritori", thread_id_log);
-            log_message(LOG_EVENT_GENERAL_ERROR, emergency_id_string, log_msg_buffer);
+            log_message(LOG_EVENT_GENERAL_ERROR, id_emergenza_log, log_msg_buffer);
             
             //pulisco anche qui
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED (errore logico arrivi).");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a CANCELED (errore logico arrivi).");
             
             //aggiorno tutti i gemello
             mtx_lock(&mutex_array_gemelli);
@@ -759,8 +803,8 @@ int gestore_emergenze_fun(void* arg){
 
         //ora emergenza diventa IN_PROGRESS
         current_nodo_emergency->data.status = IN_PROGRESS;
-        sprintf(log_msg_buffer, "Sono arrivati tutti i soccorritori per emergenza %s", emergency_id_string);
-        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, log_msg_buffer);
+        sprintf(log_msg_buffer, "Sono arrivati tutti i soccorritori per emergenza %s", id_emergenza_log);
+        log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, log_msg_buffer);
 
 
 
@@ -773,8 +817,8 @@ int gestore_emergenze_fun(void* arg){
             }
         }
 
-        sprintf(log_msg_buffer, "Inizio gestione emergenza '%s' da thread #%d sul posto, tempo stimato %.0f", emergency_id_string, thread_id_log, tempo_su_emergenza_max);
-        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+        sprintf(log_msg_buffer, "Inizio gestione emergenza '%s' da thread #%d sul posto, tempo stimato %.0f", id_emergenza_log, thread_id_log, tempo_su_emergenza_max);
+        log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
 
 
         //simulo tempo di gestione emergenza sul posto, controllando shutdown flag
@@ -782,7 +826,7 @@ int gestore_emergenze_fun(void* arg){
         for(double i = 0.0; i<tempo_su_emergenza_max; i+=1){
             if(shutdown_flag){
                 sprintf(log_msg_buffer, "Thread #%d, Richiesto shutdown durante gestione sul posto", thread_id_log);
-                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
                 possibile = false;  //la uso per dire che non proseguo
                 break;
             }
@@ -791,7 +835,7 @@ int gestore_emergenze_fun(void* arg){
 
         if(!possibile || shutdown_flag){
             current_nodo_emergency->data.status = CANCELED;
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a CANCELED");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a CANCELED");
 
             //sempre stessa cosa sistemo tutti i soccorritori
             mtx_lock(&mutex_array_gemelli);
@@ -812,7 +856,7 @@ int gestore_emergenze_fun(void* arg){
 
         //se sono qui vuol dire che ho finito di aspettare
         current_nodo_emergency->data.status = COMPLETED;
-        log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Stato emergenza impostato a COMPLETED");
+        log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Stato emergenza impostato a COMPLETED");
 
         
         //posso ritornare alla base, cambio stato dei gemelli
@@ -823,7 +867,7 @@ int gestore_emergenze_fun(void* arg){
 
             char buf_rescuer[30];   //per comodità
             snprintf(buf_rescuer, sizeof(buf_rescuer), "Rescuer %d", gemello->id);
-            sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s ha completato il lavoro", gemello->id, gemello->rescuer->rescuer_type_name, emergency_id_string);
+            sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s ha completato il lavoro", gemello->id, gemello->rescuer->rescuer_type_name, id_emergenza_log);
             log_message(LOG_EVENT_RESCUER_STATUS, buf_rescuer, log_msg_buffer);
         }
         mtx_unlock(&mutex_array_gemelli);
@@ -831,8 +875,8 @@ int gestore_emergenze_fun(void* arg){
 
         //devo anche simulare il ritorno verso la base
 
-        sprintf(log_msg_buffer, "Thread #%d, emergenza %s inizia simulazione viaggio verso base",thread_id_log, emergency_id_string);
-        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+        sprintf(log_msg_buffer, "Thread #%d, emergenza %s inizia simulazione viaggio verso base",thread_id_log, id_emergenza_log);
+        log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
 
         double tempo_ritorno_max = 0.0;
         //riciclo sulla_scena per dire se è in base
@@ -862,7 +906,7 @@ int gestore_emergenze_fun(void* arg){
         for(double j = 0; j<tempo_ritorno_max; j+=1){
             if(shutdown_flag){
                 sprintf(log_msg_buffer, "Thread #%d, Richiesto shutdown durante ritorno in base", thread_id_log);
-                log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+                log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
                 possibile = false;  //la uso per dire che non proseguo
                 break;
             }
@@ -893,7 +937,7 @@ int gestore_emergenze_fun(void* arg){
 
                         char buf_rescuer[30];
                         snprintf(buf_rescuer, sizeof(buf_rescuer), "Rescuer %d", gemello_rientrante->id);
-                        sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s rientra in base", gemello_rientrante->id, gemello_rientrante->rescuer->rescuer_type_name, emergency_id_string);
+                        sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s rientra in base", gemello_rientrante->id, gemello_rientrante->rescuer->rescuer_type_name, id_emergenza_log);
                         log_message(LOG_EVENT_RESCUER_STATUS, buf_rescuer, log_msg_buffer);
 
                     }
@@ -908,7 +952,7 @@ int gestore_emergenze_fun(void* arg){
 
         if(!possibile || shutdown_flag){
             //io per sicurezza rimetto tutti a idle
-            log_message(LOG_EVENT_EMERGENCY_STATUS, emergency_id_string, "Shutdown nel rientro dei soccorritori in base");
+            log_message(LOG_EVENT_EMERGENCY_STATUS, id_emergenza_log, "Shutdown nel rientro dei soccorritori in base");
 
             mtx_lock(&mutex_array_gemelli);
             for(int i = 0; i<current_nodo_emergency->data.resquer_cont; i++){
@@ -922,8 +966,8 @@ int gestore_emergenze_fun(void* arg){
             mtx_unlock(&mutex_array_gemelli);
         }
 
-        sprintf(log_msg_buffer, "Thread #%d, emergenza %s. Gestione terminata, soccorritori tornati in base", thread_id_log, emergency_id_string);
-        log_message(LOG_EVENT_GENERAL_INFO, emergency_id_string, log_msg_buffer);
+        sprintf(log_msg_buffer, "Thread #%d, emergenza %s. Gestione terminata, soccorritori tornati in base", thread_id_log, id_emergenza_log);
+        log_message(LOG_EVENT_GENERAL_INFO, id_emergenza_log, log_msg_buffer);
 
         //pulisco
         if(current_nodo_emergency->data.rescuer_dt != NULL){
@@ -969,7 +1013,7 @@ int main(void){
     if(sigaction(SIGINT, &sa, NULL) == -1){
         sprintf(log_msg_buffer, "Errore nella registrazione del gestore per SIGINT: '%s'", strerror(errno));
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-        pulizia_e_uscita(false,false,false,false,false);
+        pulizia_e_uscita(false,false,false,false,false, false);
         return EXIT_FAILURE;
     }
 
@@ -985,6 +1029,7 @@ int main(void){
     bool message_queue_open = false;
     bool sync_inizializzate = false;
     bool digital_twins_mutex_inizializzata = false;
+    bool id_gen_mutex_initialized = false;
 
 
     global_system_config.rescuers_type_array = NULL;
@@ -1000,7 +1045,7 @@ int main(void){
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Inizio configurazione ambiente da env.conf");
     if(!parse_environment("env.conf", &global_system_config.config_env)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di env.conf");
-        pulizia_e_uscita(false, false, false, false, false);     //nessuno dei due caricato in teoria
+        pulizia_e_uscita(false, false, false, false, false, false);     //nessuno dei due caricato in teoria
         return EXIT_FAILURE;
     }
 
@@ -1008,7 +1053,7 @@ int main(void){
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Inizio configurazione soccorritori da rescuers.conf");
     if(!parse_rescuers("rescuers.conf", &global_system_config)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di rescuers.conf");
-        pulizia_e_uscita(true, false, false, false, false);  //true perchè env.conf potrebbe essere potenzialmente ok
+        pulizia_e_uscita(true, false, false, false, false, false);  //true perchè env.conf potrebbe essere potenzialmente ok
         return EXIT_FAILURE;
     }
 
@@ -1016,7 +1061,7 @@ int main(void){
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Inizio configurazione emergenze da emergency_types.env");
     if(!parse_emergency_types("emergency_types.conf", &global_system_config)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Errore irreversibile nel parsing di emergency_types.conf");
-        pulizia_e_uscita(true, false, false, false, false);
+        pulizia_e_uscita(true, false, false, false, false, false);
         return EXIT_FAILURE;
     }
 
@@ -1030,7 +1075,7 @@ int main(void){
     //no gemelli digitali
     if((global_system_config.total_digital_twin_da_creare == 0) && (global_system_config.rescuer_type_num > 0)){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Presenti tipi di soccorritori ma nessun gemello digitale");
-        pulizia_e_uscita(config_fully_loaded, false, false, false, false);
+        pulizia_e_uscita(config_fully_loaded, false, false, false, false, false);
         return EXIT_FAILURE;
     }
 
@@ -1041,7 +1086,7 @@ int main(void){
         if((resc->x) < 0 || (resc->y) < 0 || (resc->x >= global_system_config.config_env.grid_width) || (resc->y >= global_system_config.config_env.grid_height)){
             sprintf(log_msg_buffer, "Coordinate base del soccorritore '%s' fuori dalla griglia", resc->rescuer_type_name);
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, false, false, false);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, false, false, false, false);
             return EXIT_FAILURE;
         }
     }
@@ -1053,7 +1098,7 @@ int main(void){
         if(!global_gemelli_array){
             sprintf(log_msg_buffer, "Fallimento allocazione memoria per %d gemelli digitali: '%s'", global_system_config.total_digital_twin_da_creare, strerror(errno));
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-            pulizia_e_uscita(config_fully_loaded, false, false, false, false);
+            pulizia_e_uscita(config_fully_loaded, false, false, false, false, false);
             return EXIT_FAILURE;
         }
         
@@ -1086,7 +1131,7 @@ int main(void){
         if(total_digital_twins_creati != global_system_config.total_digital_twin_da_creare){
             sprintf(log_msg_buffer, "Discrepanza tra gemelli da creare %d e gemelli creati %d", global_system_config.total_digital_twin_da_creare, total_digital_twins_creati);
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, false);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, false, false);
             return EXIT_FAILURE;
         }
 
@@ -1112,7 +1157,7 @@ int main(void){
 
     int thrd_ret;
     sprintf(log_msg_buffer, "Fallita inizializzazione del mutex per coda emergenze");
-    LOG_SCALL_THRDSC(thrd_ret, mtx_init(&mutex_emergenze_attesa, mtx_plain), LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer, config_fully_loaded, digital_twins_inizializzati, message_queue_open, false, false);
+    LOG_SCALL_THRDSC(thrd_ret, mtx_init(&mutex_emergenze_attesa, mtx_plain), LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer, config_fully_loaded, digital_twins_inizializzati, message_queue_open, false, false, false);
     //questa macro dunque ma tmx_init, guarda se non è thrd_success e nel caso stampa il log_msg_buffer, pulisce e fa EXIT_FAILURE
 
     //in questo punto dovrei fare la stessa cosa con cnd_init ma il problema è che non posso
@@ -1123,19 +1168,28 @@ int main(void){
     if(cnd_init(&cond_nuova_emergenza) != thrd_success){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Fallita inizializzazione di cond var per coda di emergenze");
         mtx_destroy(&mutex_emergenze_attesa);
-        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, false, false);
+        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, false, false, false);
         return EXIT_FAILURE;
     }
     sync_inizializzate = true;
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Sistemi di sincronizzazione inizializzati");
 
+
     if(mtx_init(&mutex_array_gemelli, mtx_plain) != thrd_success){
         log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Fallita inizializzazione di mutex per gemelli digitali");
-        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, false);
+        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, false, false);
         return EXIT_FAILURE;
     }
     digital_twins_mutex_inizializzata = true;
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Mutex per array gemelli digitali inizializzata");
+
+    if (mtx_init(&mutex_generatore_id, mtx_plain) != thrd_success) {
+        log_message(LOG_EVENT_GENERAL_ERROR, "Main", "Fallita inizializzazione di mutex per generazione id");
+        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata, false);
+        return EXIT_FAILURE;
+    }
+    id_gen_mutex_initialized = true; // Imposta il flag
+    log_message(LOG_EVENT_GENERAL_INFO, "Main", "Mutex per generatore ID emergenze inizializzato.");
 
 
 
@@ -1163,7 +1217,7 @@ int main(void){
         if(mq_desc_globale == (mqd_t)-1){    //ha fallito di nuovo
             sprintf(log_msg_buffer, "Fallimento apertura coda con nome %s: '%s'", nome_mq_queue, strerror(errno));
             log_message(LOG_EVENT_GENERAL_ERROR, "Main", log_msg_buffer);
-            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, false, sync_inizializzate, digital_twins_mutex_inizializzata);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, false, sync_inizializzate, digital_twins_mutex_inizializzata, id_gen_mutex_initialized);
             return EXIT_FAILURE;
         }
     }
@@ -1176,7 +1230,7 @@ int main(void){
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Creazione thread ascoltatore delal coda messaggi");
     if(thrd_create(&id_thread_listener, message_queue_ascoltatore_func, NULL) != thrd_success){
         log_message(LOG_EVENT_GENERAL_ERROR, "Maim", "Fallimento creazione thread listener coda messaggi");
-        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata);
+        pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata, id_gen_mutex_initialized);
         return EXIT_FAILURE;
     }
     
@@ -1206,7 +1260,7 @@ int main(void){
                 log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Effettuata join thread ascoltatore");
             }
 
-            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata, id_gen_mutex_initialized);
             return EXIT_FAILURE;
         }
         array_args_gestori[i]->id_log = i;  //assegno l'id
@@ -1231,7 +1285,7 @@ int main(void){
                 free(array_args_gestori[j]); // Libera gli argomenti dei thread joinati
             }
             free(array_args_gestori[i]);
-            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata);
+            pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata, id_gen_mutex_initialized);
             return EXIT_FAILURE;
         }
         sprintf(log_msg_buffer, "Thread gestore #%d avviato", i);
@@ -1300,7 +1354,7 @@ int main(void){
         }
     }
 
-    pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata);
+    pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata, id_gen_mutex_initialized);
     //il logger viene chiuso in cleanup
 
     printf("Sistema terminato correttamente\n");

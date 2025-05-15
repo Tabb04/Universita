@@ -52,6 +52,7 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
     sprintf(log_msg_buffer, "Errore fopen apertura file '%s': %s", nome_file, strerror(errno));
     LOG_SNCALL(file, fopen(nome_file, "r"), LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
 
+
     log_message(LOG_EVENT_FILE_PARSING, nome_file, "File aperto con successo");
 
     //per allocare nel mio system_config_t rescuer_types_array, devo sapere prima quanti sono
@@ -60,7 +61,7 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
     int riga_num_pass1 = 0;     //contatore righe al primo passaggio
     int type_count = 0;         //contatore dei tipi di soccorritori potenzialmente validi
 
-    log_message(LOG_EVENT_FILE_PARSING, "Primo passaggio: Conto pontenziali tipi di soccorritori", log_msg_buffer);
+    log_message(LOG_EVENT_FILE_PARSING, nome_file, "Primo passaggio: Conto pontenziali tipi di soccorritori");
     while(fgets(riga, sizeof(riga), file)){
         riga_num_pass1++;
         

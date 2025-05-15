@@ -1,27 +1,22 @@
-// client.c
-#define _POSIX_C_SOURCE 200809L // Per sigaction, mq_open, etc. e struct timespec
-
+#define _POSIX_C_SOURCE 200809L 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <mqueue.h>
-#include <fcntl.h>    // Per O_flags
-#include <sys/stat.h> // Per mode
-#include <time.h>     // Per time_t, struct timespec, clock_nanosleep
-#include <unistd.h>   // Per sleep (o usiamo clock_nanosleep per più precisione)
+#include <fcntl.h>    
+#include <sys/stat.h> 
+#include <time.h>     
+#include <unistd.h>   
 #include <errno.h>
 
-// Includi le definizioni delle strutture dati e costanti
-// Assicurati che il percorso sia corretto rispetto a dove metti client.c
-#include "data_types.h" // Contiene emergency_request_t
-#include "config1.h"   // Contiene EMERGENCY_NAME_LENGTH e LINE_LENGTH
+#include "data_types.h" 
+#include "config1.h"   
 
-#define MATRICOLA "674556" // <<< MODIFICA CON LA TUA MATRICOLA
+#define MATRICOLA "674556"
 #define MQ_BASE_NAME "/emergenze"
 
-// Funzione per inviare una singola richiesta
-// Ritorna true se l'invio ha avuto successo, false altrimenti
+
 bool send_emergency_request(mqd_t mqdes, const char *emergency_name, int x, int y, int delay_secs) {
     emergency_request_t request;
     char mq_log_buffer[256]; // Buffer per messaggi interni al client

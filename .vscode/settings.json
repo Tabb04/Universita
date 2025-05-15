@@ -5,6 +5,7 @@
         "stat.h": "c",
         "config1.h": "c",
         "errno.h": "c",
-        "logger.h": "c"
+        "logger.h": "c",
+        "data_types.h": "c"
     }
 }
