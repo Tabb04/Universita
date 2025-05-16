@@ -11,7 +11,7 @@
 #define SNCALL(r, c, e) do { if((r = c) == NULL) { perror(e); exit(EXIT_FAILURE); } } while(0)
 
 #define SCALL_PERSONALIZED(r, c, err, e) do {if((r = c ) == err) { perror(e); exit(EXIT_FAILURE); } } while(0)
-//per sem_open = SEM_FAILED, per mmap = MAP_FAILED
+//per sem_open = SEM_FAILED, per mmap = MAP_FAILED, per mq_open = (mqd_t) -1
 
 #define SCALL_MQREAD(r, c, buff, err) \
     do{ \

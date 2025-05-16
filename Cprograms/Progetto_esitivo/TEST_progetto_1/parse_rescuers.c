@@ -102,7 +102,10 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
         config->rescuers_type_array = NULL;
         config->total_digital_twin_da_creare = 0;
         config->instances_per_rescuer_type = NULL;
-        fclose(file);
+        if(fclose(file) == EOF){
+            sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+            file = NULL;
+        }
         return true;    //vedo poi come gestirlo perchè il file potrebbe essere in effetti vuoto?
     }
 
@@ -113,7 +116,10 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
         //in teoria malloc non è una scall quindi non uso macro
         sprintf(log_msg_buffer, "Errore su malloc su allocazione per %d tipi di soccorritore: '%s'", type_count, strerror(errno));
         log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
-        fclose(file);
+        if(fclose(file) == EOF){
+            sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+            file = NULL;
+        }
         return false;
     }
     sprintf(log_msg_buffer, "Allocato spazio per %d soccorritori", type_count);
@@ -126,7 +132,10 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
         log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
         free(config->rescuers_type_array); //libero array principlae allocato
         config->rescuers_type_array = NULL;
-        fclose(file);
+        if(fclose(file) == EOF){
+            sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+            file = NULL;
+        }
         return false;
     }
     sprintf(log_msg_buffer, "Allocato instances_per_rescuer_type per %d interi.", type_count);
@@ -208,7 +217,10 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
             free(config->rescuers_type_array); 
             config->rescuers_type_array = NULL;
             config->rescuer_type_num = 0;
-            fclose(file);
+            if(fclose(file) == EOF){
+                sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+                file = NULL;
+            }
             return false;
         }
         //in teoria non possono esserci altri errori quindi assegno valore
@@ -225,7 +237,10 @@ bool parse_rescuers(const char* nome_file, system_config_t* config){
     }
 
     config->rescuer_type_num = indice_tipo;   //se tutto bene è il numero di cicli
-    fclose(file);
+    if(fclose(file) == EOF){
+        sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+        file = NULL;
+    }
 
     //controllo in +, tutte le righe erano formattate male
     if(config->rescuer_type_num == 0 && type_count > 0){

@@ -111,7 +111,10 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
                 if(sscanf(valore, "%d", &env_config->grid_height) != 1 || env_config->grid_height <= 0){
                     sprintf(log_msg_buffer, "Errore riga %d, valore per height=%s non valido", num_riga, valore);
                     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
-                    fclose(file);
+                    if(fclose(file) == EOF){
+                        sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+                        file = NULL;
+                    }
                     return false;
                 }else{
                     height_trovata = true;
@@ -122,7 +125,10 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
                 if(sscanf(valore, "%d", &env_config->grid_width) != 1 || env_config->grid_width <= 0){
                     sprintf(log_msg_buffer, "Errore riga %d, valore per width=%s non valido", num_riga, valore);
                     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
-                    fclose(file);
+                    if(fclose(file) == EOF){
+                        sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+                        file = NULL;
+                    }
                     return false;
                 }else{
                     width_trovata = true;
@@ -139,7 +145,10 @@ bool parse_environment(const char* nome_file, environment_t *env_config){
         }
     }
     
-    fclose(file);
+    if(fclose(file) == EOF){
+        sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+        file = NULL;
+    }
 
     //controllo se ho trovato tutti e tre i valori che mi servono
     if(!coda_trovata || !height_trovata || !width_trovata){

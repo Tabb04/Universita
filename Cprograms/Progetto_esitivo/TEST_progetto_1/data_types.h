@@ -49,7 +49,6 @@ typedef enum{
     WAITING,
     ASSIGNED,
     IN_PROGRESS,
-    PAUSED,
     COMPLETED,
     CANCELED,
     TIMEOUT

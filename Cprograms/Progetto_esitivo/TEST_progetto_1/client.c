@@ -12,155 +12,113 @@
 
 #include "data_types.h" 
 #include "config1.h"   
+#include "Syscalls_3_progetto.h"
 
-#define MATRICOLA "674556"
-#define MQ_BASE_NAME "/emergenze"
+#define MQ_NOME "/emergenze674556"
 
+//faccio in modo che sia exit failure o success
+//nel client non mi metto a loggare su file
 
-bool send_emergency_request(mqd_t mqdes, const char *emergency_name, int x, int y, int delay_secs) {
-    emergency_request_t request;
-    char mq_log_buffer[256]; // Buffer per messaggi interni al client
+int res;
 
-    if (strlen(emergency_name) >= EMERGENCY_NAME_LENGTH) {
-        fprintf(stderr, "Errore: Nome emergenza '%s' troppo lungo (max %d caratteri).\n",
-                emergency_name, EMERGENCY_NAME_LENGTH - 1);
+bool invia_emergenze(mqd_t desc_coda, const char* nome, int x, int y, int delay){
+    emergency_request_t emergenza;
+    
+    if(strlen(nome) >= EMERGENCY_NAME_LENGTH){  //mi fermo prima di mandare al server
+        perror("Errore lunghezza");
+        return EXIT_FAILURE;
+    }
+    strncpy(emergenza.emergency_name, nome, EMERGENCY_NAME_LENGTH - 1);
+    emergenza.emergency_name[EMERGENCY_NAME_LENGTH - 1] = '\0';
+    emergenza.x = x;
+    emergenza.y = y;
+
+    emergenza.timestamp = time(NULL);
+
+    printf("Aspetto %d secondi prima di inviare l'emergenza\n", delay);
+    sleep(delay);
+
+    //non uso SCALL perchè devo ritornare false
+    if(mq_send(desc_coda, (const char*)&emergenza, sizeof(emergenza), 0) == - 1){
+        perror("Errore mq_send");
         return false;
     }
-    strncpy(request.emergency_name, emergency_name, EMERGENCY_NAME_LENGTH -1);
-    request.emergency_name[EMERGENCY_NAME_LENGTH -1] = '\0';
-
-    request.x = x;
-    request.y = y;
-    // Interpretiamo delay_secs come un ritardo prima dell'invio.
-    // Il timestamp sarà il momento dell'effettivo "accadimento" o registrazione,
-    // che per semplicità impostiamo a time(NULL) al momento della costruzione della richiesta,
-    // *prima* dell'eventuale delay del client.
-    // Se delay_secs dovesse influenzare il timestamp dell'evento, la logica qui cambierebbe.
-    request.timestamp = time(NULL);
-
-    if (delay_secs > 0) {
-        printf("Client: In attesa per %d secondi prima di inviare l'emergenza '%s'...\n", delay_secs, emergency_name);
-        // Usiamo clock_nanosleep per una sleep più precisa e interrompibile
-        struct timespec delay_ts;
-        delay_ts.tv_sec = delay_secs;
-        delay_ts.tv_nsec = 0;
-        // Loop per gestire l'interruzione di clock_nanosleep da segnali
-        while(clock_nanosleep(CLOCK_MONOTONIC, 0, &delay_ts, &delay_ts) == EINTR);
-    }
-
-    printf("Client: Invio emergenza: Tipo='%s', Pos=(%d,%d), Timestamp=%ld\n",
-           request.emergency_name, request.x, request.y, (long)request.timestamp);
-
-    if (mq_send(mqdes, (const char *)&request, sizeof(emergency_request_t), 0) == -1) {
-        // Usiamo 0 come priorità del messaggio, il server non la usa per mq_receive da specifiche
-        snprintf(mq_log_buffer, sizeof(mq_log_buffer), "Errore client: mq_send fallito per emergenza '%s'", request.emergency_name);
-        perror(mq_log_buffer);
-        return false;
-    }
-
-    printf("Client: Emergenza '%s' inviata con successo.\n", request.emergency_name);
     return true;
 }
 
 
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "Uso:\n");
-        fprintf(stderr, "  %s <nome_emergenza> <coord_x> <coord_y> <delay_in_secs>\n", argv[0]);
-        fprintf(stderr, "  %s -f <file_richieste>\n", argv[0]);
+
+int main(int argc, char* argv[]){
+
+    mqd_t mq_desc;
+    bool success = true;
+
+    if(argc<2){ //argomenti minimo tre, ./client, -f, nome_file
         return EXIT_FAILURE;
     }
 
-    char mq_name[LINE_LENGTH];
-    snprintf(mq_name, sizeof(mq_name), "%s%s", MQ_BASE_NAME, MATRICOLA);
+    SCALL_PERSONALIZED(mq_desc, mq_open(MQ_NOME, O_WRONLY), (mqd_t) -1, "Errore mq_open");
+    
 
-    // Apri la coda di messaggi (solo scrittura)
-    // Non creiamo la coda qui, il server dovrebbe averla già creata.
-    // Se il server non è attivo, mq_open fallirà (correttamente).
-    mqd_t mqdes = mq_open(mq_name, O_WRONLY);
-    if (mqdes == (mqd_t)-1) {
-        fprintf(stderr, "Errore client: Impossibile aprire la coda di messaggi '%s'. Assicurarsi che il server sia in esecuzione.\n", mq_name);
-        perror("Dettaglio errore mq_open");
-        return EXIT_FAILURE;
-    }
-    printf("Client: Coda di messaggi '%s' aperta con successo.\n", mq_name);
-
-    bool success = true; // Flag per tracciare se tutti gli invii hanno avuto successo
-
-    if (strcmp(argv[1], "-f") == 0) {
-        // Modalità file
-        if (argc != 3) {
-            fprintf(stderr, "Errore: Opzione -f richiede un nome file.\n");
-            fprintf(stderr, "Uso: %s -f <file_richieste>\n", argv[0]);
-            mq_close(mqdes);
-            return EXIT_FAILURE;
+    //prima faccio modalità file
+    if(strcmp(argv[1], "-f") == 0){
+        //devo avere 3 argomenti
+        if(argc != 3){
+            SCALL(res, mq_close(mq_desc), "Errore mq_close");
+           return EXIT_FAILURE;
         }
-        const char *filename = argv[2];
-        FILE *file = fopen(filename, "r");
-        if (!file) {
-            fprintf(stderr, "Errore client: Impossibile aprire il file di richieste '%s'.\n", filename);
-            perror("Dettaglio errore fopen");
-            mq_close(mqdes);
-            return EXIT_FAILURE;
-        }
-        printf("Client: Lettura richieste dal file '%s'...\n", filename);
+        FILE* file;
+        SNCALL(file, fopen(argv[2], "r"), "Errore fopen");
 
-        char line_buffer[LINE_LENGTH];
-        int line_num = 0;
-        while (fgets(line_buffer, sizeof(line_buffer), file)) {
-            line_num++;
-            // Rimuovi newline
-            line_buffer[strcspn(line_buffer, "\n")] = 0;
+        char buffer[LINE_LENGTH];   //uso stessa LINE_LENGTH
+        int num_linea;
+        while(fgets(buffer, sizeof(buffer), file)){
+            num_linea++;
+            buffer[strcspn(buffer, "\n")] = 0;
 
-            char name_from_file[EMERGENCY_NAME_LENGTH];
-            int x_from_file, y_from_file, delay_from_file;
+            char nome_da_file[EMERGENCY_NAME_LENGTH];
+            int x_da_file, y_da_file, delay_da_file;
 
-            // Parsing della riga (molto semplice, si aspetta spazi come separatori)
-            // Formato: <nome_emergenza_senza_spazi> <coord_x> <coord_y> <delay_in_secs>
-            // Per nomi con spazi, sscanf diventa più complesso.
-            // Per ora, assumiamo nomi emergenza senza spazi.
-            if (sscanf(line_buffer, "%s %d %d %d", name_from_file, &x_from_file, &y_from_file, &delay_from_file) == 4) {
-                if (!send_emergency_request(mqdes, name_from_file, x_from_file, y_from_file, delay_from_file)) {
-                    fprintf(stderr, "Client: Errore invio richiesta da file (riga %d): %s\n", line_num, line_buffer);
-                    success = false; // Segna che almeno un invio è fallito
-                    // Decidere se continuare con le altre righe o interrompere
-                    // Per ora continuiamo
+            //come separatori uso lo spazio
+        
+            if(sscanf(buffer, "%s %d %d %d", nome_da_file, &x_da_file, &y_da_file, &delay_da_file) == 4){
+                if(!invia_emergenze(mq_desc, nome_da_file, x_da_file, y_da_file, delay_da_file)){
+                    success = false;
+                }else{
+                    success = true;
                 }
-            } else {
-                fprintf(stderr, "Client: Formato riga %d errato nel file: '%s'. Riga ignorata.\n", line_num, line_buffer);
-                success = false; // Considera un errore di formato come un fallimento parziale
+            }else{
+                success = false;
             }
         }
-        fclose(file);
-
-    } else {
-        // Modalità argomenti da riga di comando
-        if (argc != 5) {
-            fprintf(stderr, "Errore: Numero di argomenti errato per la richiesta singola.\n");
-            fprintf(stderr, "Uso: %s <nome_emergenza> <coord_x> <coord_y> <delay_in_secs>\n", argv[0]);
-            mq_close(mqdes);
+        SCALL(res, fclose(file), "Errore fclose");
+        
+    }else{
+        //da riga di comando
+        if(argc != 5){
+            SCALL(res, mq_close(mq_desc), "Errore mq_close");
             return EXIT_FAILURE;
         }
-        const char *emergency_name_arg = argv[1];
-        // atoi può essere problematico se le stringhe non sono numeri validi,
-        // per robustezza si dovrebbe usare strtol con controllo errori.
-        int x_arg = atoi(argv[2]);
-        int y_arg = atoi(argv[3]);
-        int delay_arg = atoi(argv[4]);
-
-        if (!send_emergency_request(mqdes, emergency_name_arg, x_arg, y_arg, delay_arg)) {
+        const char* nome_emergenza = argv[1];
+        int x_emergenza = atoi(argv[2]);
+        int y_emergenza = atoi(argv[3]);
+        int delay = atoi(argv[4]);
+        
+        if(!invia_emergenze(mq_desc, nome_emergenza, x_emergenza, y_emergenza, delay)){
             success = false;
+        }else{
+            success = true;
         }
+
+    }
+    
+    SCALL(res, mq_close(mq_desc), "Errore mq_close");
+    printf("Emergenza inviata\n");
+    
+    if(success == true){
+        return EXIT_SUCCESS;
+    }else{
+        return EXIT_FAILURE;
     }
 
-    // Chiudi la coda di messaggi
-    if (mq_close(mqdes) == -1) {
-        perror("Errore client: mq_close fallito");
-        // Anche se la chiusura fallisce, tentiamo di uscire con lo stato corretto
-        // basato sul successo degli invii.
-        return success ? EXIT_FAILURE : EXIT_FAILURE; // Sempre FAILURE se mq_close fallisce
-    }
-    printf("Client: Coda di messaggi chiusa.\n");
-
-    return success ? EXIT_SUCCESS : EXIT_FAILURE;
 }

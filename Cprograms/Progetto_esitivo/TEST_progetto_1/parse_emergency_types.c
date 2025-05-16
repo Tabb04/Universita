@@ -137,7 +137,10 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
         log_message(LOG_EVENT_FILE_PARSING, nome_file, "Nessun tipo di emergenza trovato");
         config->emergency_type_num = 0;
         config->emergency_types_array = NULL;
-        fclose(file);
+        if(fclose(file) == EOF){
+            sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+            file = NULL;
+        }
         return true;    //anche qui considero file vuoto come potenzialmente corretto
     }
     
@@ -147,7 +150,10 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
         //malloc non è syscall quindi gestisco nello stesso modo di parse_rescuers
         sprintf(log_msg_buffer, "Errore su malloc su allocazione per %d tipi di emergenze: '%s'", type_count, strerror(errno));
         log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
-        fclose(file);
+        if(fclose(file) == EOF){
+            sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+            file = NULL;
+        }
         return false;
     }
 
@@ -286,7 +292,10 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
         if(!request_arr){   //se fallita malloc
             sprintf(log_msg_buffer, "Errore riga %d, impossibile allocare spazio per soccorritori", riga_num_pass2);
             log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
-            fclose(file);
+            if(fclose(file) == EOF){
+                sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+                file = NULL;
+            }
             //se non ero alla prima iterazione libero array
             for(int i = 0; i<indice_emergenza; i++){
                 if(config->emergency_types_array[i].emergency_desc){
@@ -363,7 +372,10 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
                     log_message(LOG_EVENT_FILE_PARSING, nome_file, log_msg_buffer);
                     
                     free(request_arr);
-                    fclose(file);
+                    if(fclose(file) == EOF){
+                        sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+                        file = NULL;
+                    }
                     for (int i = 0; i < indice_emergenza; ++i) {
                         if (config->emergency_types_array[i].emergency_desc) free(config->emergency_types_array[i].emergency_desc);
                         if (config->emergency_types_array[i].rescuers) free(config->emergency_types_array[i].rescuers);
@@ -407,7 +419,10 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
             if(config->emergency_types_array) free(config->emergency_types_array);
             config->emergency_types_array = NULL;
             config->emergency_type_num = 0;
-            fclose(file);
+            if(fclose(file) == EOF){
+                sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+                file = NULL;
+            }
             return false;
         }
         strcpy(emergency_types_ptr->emergency_desc, nome_temp1);
@@ -433,7 +448,10 @@ bool parse_emergency_types(const char* nome_file, system_config_t* config){
     //ora posso dire quanti tipi di emergenza ho
     config->emergency_type_num = indice_emergenza;
 
-    fclose(file);
+    if(fclose(file) == EOF){
+        sprintf(log_msg_buffer, "Errore durante la chiusura del file '%s': %s", nome_file, strerror(errno));
+        file = NULL;
+    }
 
     //come in rescuers se avevo almeno un candidato ma nessuno era valido considero fallimento
     if((config->emergency_type_num == 0) && (type_count > 0)){

@@ -36,7 +36,7 @@ void client_sigint_handler(int signo) {
 
 // Funzione per inviare una singola richiesta (leggermente modificata per non fare sleep)
 // La sleep la gestirà il chiamante se necessario.
-bool send_emergency_request_interactive(mqd_t mqdes, const char *emergency_name, int x, int y) {
+bool send_emergency_request_interactive(mqd_t desc_coda, const char *emergency_name, int x, int y) {
     emergency_request_t request;
     char mq_log_buffer[256];
 
@@ -55,7 +55,7 @@ bool send_emergency_request_interactive(mqd_t mqdes, const char *emergency_name,
     printf("Client: Invio emergenza: Tipo='%s', Pos=(%d,%d), Timestamp=%ld\n",
            request.emergency_name, request.x, request.y, (long)request.timestamp);
 
-    if (mq_send(mqdes, (const char *)&request, sizeof(emergency_request_t), 0) == -1) {
+    if (mq_send(desc_coda, (const char *)&request, sizeof(emergency_request_t), 0) == -1) {
         snprintf(mq_log_buffer, sizeof(mq_log_buffer), "Client Errore: mq_send fallito per emergenza '%s'", request.emergency_name);
         perror(mq_log_buffer);
         return false;
@@ -68,7 +68,7 @@ bool send_emergency_request_interactive(mqd_t mqdes, const char *emergency_name,
 int main(void) { // Non usiamo argc, argv per questo client interattivo
     struct sigaction sa_client_int;
     char mq_name[LINE_LENGTH];
-    mqd_t mqdes;
+    mqd_t desc_coda;
     char input_buf[INPUT_BUFFER_SIZE];
     char emergency_name_input[EMERGENCY_NAME_LENGTH];
     int x_input, y_input, delay_input; // Delay non usato per l'invio diretto, ma letto
@@ -84,8 +84,8 @@ int main(void) { // Non usiamo argc, argv per questo client interattivo
     snprintf(mq_name, sizeof(mq_name), "%s%s", MQ_BASE_NAME, MATRICOLA);
 
     printf("Client Interattivo: Tentativo di connessione alla coda '%s'...\n", mq_name);
-    mqdes = mq_open(mq_name, O_WRONLY);
-    if (mqdes == (mqd_t)-1) {
+    desc_coda = mq_open(mq_name, O_WRONLY);
+    if (desc_coda == (mqd_t)-1) {
         fprintf(stderr, "Client Errore: Impossibile aprire la coda di messaggi '%s'. Assicurarsi che il server sia in esecuzione.\n", mq_name);
         perror("Dettaglio errore mq_open");
         return EXIT_FAILURE;
@@ -122,7 +122,7 @@ int main(void) { // Non usiamo argc, argv per questo client interattivo
         if (sigint_received_client) break; // Controlla di nuovo dopo sscanf
 
         if (items_scanned >= 3) { // Almeno nome, x, y. Il delay è opzionale e ignorato.
-            if (!send_emergency_request_interactive(mqdes, emergency_name_input, x_input, y_input)) {
+            if (!send_emergency_request_interactive(desc_coda, emergency_name_input, x_input, y_input)) {
                 fprintf(stderr, "Client: Fallito l'invio dell'emergenza '%s'.\n", emergency_name_input);
                 // Decidere se uscire o permettere altri tentativi
             }
@@ -137,7 +137,7 @@ int main(void) { // Non usiamo argc, argv per questo client interattivo
     }
 
     printf("\nClient: Chiusura e terminazione...\n");
-    if (mq_close(mqdes) == -1) {
+    if (mq_close(desc_coda) == -1) {
         perror("Client Errore: mq_close fallito");
         return EXIT_FAILURE; // Considera un errore grave
     }
