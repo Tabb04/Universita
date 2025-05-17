@@ -33,7 +33,7 @@ typedef struct{
 typedef struct{
     rescuer_type_t* type;
     int required_count;
-    int time_to_manage; 
+    int time_to_manage;
 }rescuer_request_t;
 
 
@@ -85,12 +85,15 @@ typedef struct{
 
 typedef struct{
     environment_t config_env;
+    
     rescuer_type_t* rescuers_type_array;
-    int rescuer_type_num;                       
-    emergency_type_t *emergency_types_array;    
+    int* instances_per_rescuer_type; //contiene il num per ogni tipo di rescuers_type_array           
+    int rescuer_type_num;
+
+    emergency_type_t *emergency_types_array;
     int emergency_type_num;
-    int* instances_per_rescuer_type; // Array parallelo a rescuers_type_array, contiene <num> per ogni tipo                   
-    int total_digital_twin_da_creare; 
+    
+    int total_digital_twin_da_creare;
 }system_config_t;
 
 

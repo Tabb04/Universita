@@ -6,6 +6,7 @@
         "config1.h": "c",
         "errno.h": "c",
         "logger.h": "c",
-        "data_types.h": "c"
+        "data_types.h": "c",
+        "stdio.h": "c"
     }
 }
