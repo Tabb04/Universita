@@ -82,7 +82,12 @@ Ogni azione/errore rilevante viene scritta su un file di logging chiamato emerge
         Dopo ciò procede con l'inizializzazione dei gemelli digitali allocando spazio tramite il counter
         globale delle unità.
         Poi inizializza tutti i sistemi di sicronizzazione come mutex e condition variables.
-        Infine dopo aver aperto e inizializzato la coda messaggi procede con la creazione del
+        Infine dopo aver aperto e inizializzato la coda messaggi procede con la creazione del thread
+        ascoltatore della coda messaggi e dei thread gestori delle emergenze
+
+    4.3 Thread ascoltatore
+        Il thread ascoltatore utilizza la funzione message_queue_ascoltatore_func.
+        Viene utilizzata invece di una timed_recive per 
 
      
 
