@@ -87,7 +87,39 @@ Ogni azione/errore rilevante viene scritta su un file di logging chiamato emerge
 
     4.3 Thread ascoltatore
         Il thread ascoltatore utilizza la funzione message_queue_ascoltatore_func.
-        Viene utilizzata invece di una timed_recive per 
+        Viene utilizzata invece di una mq_timedrecive invece di una mq_recive in modo tale che
+        si possa svolgere una corretta terminazione del programma. (spiegato bene nella gestione dei segnali)
+        La funzione quindi fa i controlli sul messaggio ricevuto e se tutto è corretto alloca
+        spazio per emergency_node_t, assegna i suoi valori e con la mutex ottenuta aggiunge il nodo
+        alla coda delle emergenze in attesa
+
+    4.4 Thread Gestore
+        Il thread Gestore utilizza la funzione gestore_emergenze_func.
+        Comincia col controllare se sono disponibili delle emergenze nella lista delle emergenze in
+        attesa, se si la preleva e rilascia il lock. Allora la funzione calcola il deadline, e 
+        crea un array dove saranno memorizzati i migliori candidati trovati. Poi itera sul numero
+        di soccorritori richiesti dall'emergenza e per ogni tipo di emergenza aquisisce il lock
+        dell'array dei gemelli digitali, se un gemello ha il tipo giusto calcola il tempo di arrivo
+        e lo aggiunge all'array dei candidati (dove ho il candidato e il tempo di arrivo).
+        A questo punto ho l'array con tutti i candidati possibili che può essere ordinato in base
+        al tempo potenziale d'arrivo e posso selezionare i primi tanti quanti ne sono richiesti.
+        A questo punto confronto il tempo di arrivo del più lento con il deadline prestabilito e se
+        non è sufficiente assegno TIMEOUT e esco.
+        A questo punto se tutto è andato bene posso assegnare i gemelli digitali all'emergenza (e di
+        conseguenza aggiornare lo stato dei gemelli nell'array dei gemelli globale). Ho provato anche
+        a controllare se c'è stato un conflitto, ergo se un soccorritore è stato preso da qualcun'altro nel frattempo (potrei anche fare tutto fino a qui tenendo la lock ma sembra poco efficiente).
+        Se sono arrivato qui posso iniziare le simulazioni e lo faccio facendo una thrd_sleep che durerà
+        quanto il soccorritore più lento ci mette ad arrivare (faccio sleep a scaglioni di un secondo per controllare che non ci sia stata un interruzione). Quando sono arrivati tutti posso simulare il 
+        lavoro sul posto nello stesso modo e fare ancora lo stesso per il rientro in base. Quando sono
+        rientrati tutti posso aggiornare lo stato dei gemelli e uscire.
+
+    4.5 Pulizia
+        Tutta la pulizia prima di uscite per errore o di terminazione sono gestite dalla funzione
+        pulizia_e_uscita() definita nel main.
+        La funzione esegue le necessarie pulizie basandosi su parametri booleani passati.
+        In ordine il primo parametro guarda se la variabile di tipo system_config_t che contiene
+        tutti i parametri di configurazione dell'ambiente è stata inizializzata.
+        La seconda
 
      
 
