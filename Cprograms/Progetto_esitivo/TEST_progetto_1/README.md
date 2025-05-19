@@ -147,7 +147,7 @@ Ogni azione/errore rilevante viene scritta su un file di logging chiamato emerge
     5.2 Cambiamenti nelle strutture dati
         Le strutture dati sono praticamente rimaste invariate rispetto a quelle del pdf se non per
         un paio di campi in emergency_t.
-        La prima è l'utilizzo di rescuer_digital_twin** rescuer_dt con ** invece di *.
+        La prima è l'utilizzo di rescuer_digital_twin** rescuer_dt con ** invece di (*).
         Questo perchè per come ho progettato il sistema un puntatore ad un array di puntatori di strutture
         è molto più pratico di un puntatore ad array di strutture visto che utilizzo per gestire tutti
         i soccorritori globali l'array global_gemelli_array. In questo modo quando un thread gestore
