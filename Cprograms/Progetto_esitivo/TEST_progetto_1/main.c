@@ -38,8 +38,8 @@ typedef struct nodo_emergenza{
 
 //variabili per la generazione dell'id
 time_t ultimo_timestamp = 0;
-int    counter_id_gen = 0;
-mtx_t  mutex_generatore_id; //mutex per proteggere l'accesso alle variabili sopra
+int counter_id_gen = 0;
+mtx_t mutex_generatore_id; //mutex per proteggere l'accesso alle variabili sopra
 
 
 
@@ -61,7 +61,7 @@ mtx_t mutex_array_gemelli;
 volatile bool shutdown_flag = false;    //se true termino il thread
 
 //descrittore coda
-mqd_t mq_desc_globale = (mqd_t)-1;   //inizializzazione a valore non valido secondo
+mqd_t mq_desc_globale = (mqd_t)-1;   //inizializzazione a valore non valido
 
 void genera_id_func(char *buff, size_t buff_len) {
     mtx_lock(&mutex_generatore_id);
@@ -71,7 +71,7 @@ void genera_id_func(char *buff, size_t buff_len) {
         counter_id_gen++;
     } else {
         ultimo_timestamp = current_time;
-        counter_id_gen = 0; // Resetta il contatore per il nuovo secondo
+        counter_id_gen = 0; //resetta il contatore
     }
     //copia il valore del contatore prima di sbloccare il mutex
     //nel caso un altro thread modifichi counter_id_gen subito dopo
@@ -298,7 +298,7 @@ int gestore_emergenze_fun(void* arg){
 
     if(!thread_args){
         log_message(LOG_EVENT_GENERAL_ERROR, "Thread Gestore", "Argomenti del thread nulli");
-        return -1; //guarda cosa mettere
+        return -1;
     }
 
     int thread_id_log = thread_args->id_log;
@@ -847,7 +847,9 @@ int gestore_emergenze_fun(void* arg){
             mtx_unlock(&mutex_array_gemelli);
 
             free(sulla_scena);
-            if (current_nodo_emergency->data.rescuer_dt) free(current_nodo_emergency->data.rescuer_dt);
+            if (current_nodo_emergency->data.rescuer_dt){
+                free(current_nodo_emergency->data.rescuer_dt);
+            }
             current_nodo_emergency->data.rescuer_dt = NULL;
             free(current_nodo_emergency);
             current_nodo_emergency = NULL;
@@ -1188,7 +1190,7 @@ int main(void){
         pulizia_e_uscita(config_fully_loaded, digital_twins_inizializzati, message_queue_open, sync_inizializzate, digital_twins_mutex_inizializzata, false);
         return EXIT_FAILURE;
     }
-    id_gen_mutex_initialized = true; // Imposta il flag
+    id_gen_mutex_initialized = true; 
     log_message(LOG_EVENT_GENERAL_INFO, "Main", "Mutex per generatore ID emergenze inizializzato.");
 
 
