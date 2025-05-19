@@ -162,8 +162,7 @@ Ogni azione/errore rilevante viene scritta su un file di logging chiamato emerge
     di laboratorio 2
 
     6.1 Makefile
-        è incluso nello zip un makefile che ha i comandi make clean e make. Il make genera un eseguibile
-        chiamato ./emergency_server e un client chiamato ./client.
+        è incluso nello zip un makefile che ha i comandi make clean, make run e make. Il make genera un eseguibile chiamato ./emergency_server e un client chiamato ./client.
 
     6.2 Esecuzione
         Per eseguire correttamente bisogna aprire il server in un terminale e in un altro terminale invocare il client con argomenti in ordine ./client <nome emergenza> <x> <y> <delay>.

@@ -6,7 +6,7 @@
 #include <threads.h> 
 #include <mqueue.h>  
 #include <fcntl.h>   //per O_flags in mq_open
-#include <sys/stat.h> // Per mode in mq_open
+#include <sys/stat.h> //per mode in mq_open
 #include <errno.h>
 #include <math.h>   //uso ciel e abs
 #include <signal.h> //per gestione segnali
@@ -39,7 +39,7 @@ typedef struct nodo_emergenza{
 //variabili per la generazione dell'id
 time_t ultimo_timestamp = 0;
 int    counter_id_gen = 0;
-mtx_t  mutex_generatore_id; // Mutex per proteggere l'accesso alle variabili sopra
+mtx_t  mutex_generatore_id; //mutex per proteggere l'accesso alle variabili sopra
 
 
 
@@ -866,7 +866,7 @@ int gestore_emergenze_fun(void* arg){
             gemello->status = RETURNING_TO_BASE;
 
             char buf_rescuer[30];   //per comodità
-            snprintf(buf_rescuer, sizeof(buf_rescuer), "Rescuer %d", gemello->id);
+            snprintf(buf_rescuer, sizeof(buf_rescuer), "Soccorritore %d", gemello->id);
             sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s ha completato il lavoro", gemello->id, gemello->rescuer->rescuer_type_name, id_emergenza_log);
             log_message(LOG_EVENT_RESCUER_STATUS, buf_rescuer, log_msg_buffer);
         }
@@ -936,7 +936,7 @@ int gestore_emergenze_fun(void* arg){
                         mtx_unlock(&mutex_array_gemelli);
 
                         char buf_rescuer[30];
-                        snprintf(buf_rescuer, sizeof(buf_rescuer), "Rescuer %d", gemello_rientrante->id);
+                        snprintf(buf_rescuer, sizeof(buf_rescuer), "Soccorritore %d", gemello_rientrante->id);
                         sprintf(log_msg_buffer, "Soccorritore %d di tipo '%s' per emergenza %s rientra in base", gemello_rientrante->id, gemello_rientrante->rescuer->rescuer_type_name, id_emergenza_log);
                         log_message(LOG_EVENT_RESCUER_STATUS, buf_rescuer, log_msg_buffer);
 

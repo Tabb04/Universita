@@ -30,4 +30,7 @@ clean:
 	      $(SERVER_OBJS) $(CLIENT_OBJS) \
 	      *.log core
 
-.PHONY: all clean
+run: $(SERVER_NAME)
+	./$(SERVER_NAME)
+
+.PHONY: all clean run
