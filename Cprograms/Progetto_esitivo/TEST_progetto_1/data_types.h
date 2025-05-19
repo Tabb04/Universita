@@ -1,5 +1,5 @@
-#ifndef DATATYPES_H
-#define DATATYPES_H
+#ifndef DATA_TYPES_H
+#define DATA_TYPES_H
 
 #include<stdbool.h>
 #include<time.h>
@@ -62,7 +62,7 @@ typedef struct{
 }emergency_request_t;
 
 typedef struct{
-    emergency_type_t* type; //metto puntatore finche prof non risponde
+    emergency_type_t* type; //metto puntatori finche prof non risponde
     emergency_status_t status;
     int x;
     int y;
@@ -72,7 +72,7 @@ typedef struct{
 }emergency_t;
 
 
-//strutture di supporto non definite da prof
+//strutture di supporto non definite nel pdf
 
 typedef struct{
     char queue_name[LINE_LENGTH];
@@ -80,8 +80,6 @@ typedef struct{
     int grid_width;
 }environment_t;
 
-//questa struttura mi serve di supporto visto che non possso apparentemente modificare
-//strutture dati date
 
 typedef struct{
     environment_t config_env;

@@ -98,12 +98,12 @@ void pulizia_e_uscita(bool config_loaded, bool digital_twins_loaded, bool mq_loa
     
     log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Inizio pulizia");
     
-    if(mq_loaded && (mq_desc_globale != (mqd_t)-1)){
+    if(mq_loaded){
         mq_close(mq_desc_globale);
         log_message(LOG_EVENT_MESSAGE_QUEUE, "Cleanup", "Coda messaggi chiusa");
     }
 
-    if(digital_twins_loaded && global_gemelli_array){
+    if(digital_twins_loaded){   //&& global_gemelli_array a volte non va
         free(global_gemelli_array);
         global_gemelli_array = NULL;
         log_message(LOG_EVENT_GENERAL_INFO, "Cleanup", "Deallocato array gemelli digitali");

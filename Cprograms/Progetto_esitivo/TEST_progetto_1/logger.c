@@ -7,7 +7,7 @@
 
 static FILE* log_file = NULL;
 
-const char* log_event_type_to_string(log_event_type_t event_type){
+const char* log_event_type_string(log_event_type_t event_type){
     switch (event_type) {
         case LOG_EVENT_FILE_PARSING: return "FILE_PARSING";
         case LOG_EVENT_MESSAGE_QUEUE: return "MESSAGE_QUEUE";
@@ -50,6 +50,6 @@ void log_message(log_event_type_t event_type, const char* id, const char* messag
     }
     time_t tempo_attuale = time(NULL);
 
-    fprintf(log_file, "[%ld] (%s) [%s] %s\n", (long)tempo_attuale, (id ? id: "NULL"), log_event_type_to_string(event_type), message);
+    fprintf(log_file, "[%ld] (%s) [%s] %s\n", (long)tempo_attuale, (id ? id: "NULL"), log_event_type_string(event_type), message);
     fflush(log_file);
 }

@@ -16,7 +16,7 @@
 
 #define MQ_NOME "/emergenze674556"
 
-//faccio in modo che sia exit failure o success
+
 //nel client non mi metto a loggare su file
 
 int res;

@@ -71,7 +71,7 @@ Ogni azione/errore rilevante viene scritta su un file di logging chiamato emerge
     Tutto il logging su file e eventuali accorgimenti sono gestiti dalle funzioni definite nel
     file logger.c
     Il logging su file contiene il timestamp del logging, l'id del chiamante del logging, il tipo di evento definito tra i campi dell'enum nell'header (enum che segue la richiesta del pdf) trasformato
-    in stringa dalla funzione log_event_type_to_string e il messaggio passato.
+    in stringa dalla funzione log_event_type_string e il messaggio passato.
 
 
 4. Main
@@ -119,8 +119,58 @@ Ogni azione/errore rilevante viene scritta su un file di logging chiamato emerge
         La funzione esegue le necessarie pulizie basandosi su parametri booleani passati.
         In ordine il primo parametro guarda se la variabile di tipo system_config_t che contiene
         tutti i parametri di configurazione dell'ambiente è stata inizializzata.
-        La seconda
+        La seconda controlla se l'array globale dei gemelli digitali è stato inizializzato.
+        La terza controlla che la coda messaggi sia stata aperta e le altre se mutex e condition
+        variables sono state inizializzate. Infine viene chiamata la funzione di chiusura del logger
+        Questa funzione o viene chiamata quando succede un errore nel codice o sui loop while (!shutdown_flag) nel main o nelle 2 funzioni thread.
 
+    4.6 Segnali
+        Ho anche implementato una gestione dei segnali per catturare i Ctrl+C.
+        Il main infatti quando cattura un segnale la fa gestire alla funzione che imposta lo shutdown
+        flag a true, quindi interrompendo evenutali funzioni di lettura su coda e gestione emergenza e triggerando il sistema di pulizia.
+
+
+5. Modifiche/Errori
+
+    5.1 Protezione con macro
+        Come spiegato nella parte 3.3 del pdf sarebbero andate protette le chiamate di sistema tramite
+        delle macro come si è ripetuto spesso a lezione. Nel mio casò però ho ritenuto che l'utilizzo
+        delle macro fosse abbastanza inapplicabile. Questo per diversi motivi tra cui il fatto che
+        le chiamate di sistema sono utilizzate in diversi parti del codice e in ogni parte richiede delle
+        pulizie e controlli specifici. Avrei potuto utilizzare macro per fare solo una parte dei controlli
+        ma a quel punto diventava impraticabile visto che avrei dovuto avere MACRO(valore, funzione, ...);
+        if(controllo se non ha funzionato){ pulizia e assegnamenti specifici a questa parte}.
+        La parte dove sarebbe stata forse più fattibile l'utilizzo di esse sarebbe stato nel main, ma anche li (come mostrato nell'inizializzazione della mutex per la lista delle emergenze in attesa)
+        è impraticabile per il fatto che richiede 11 parametri per un utilizzo utile + scrittura del messaggio sul buffer prima (viene comunque utilizzata come esempio li con la macro LOG_SCALL_THRDSC e nelle fopen nei parser).
+        Nel client invece sono state utilizzate macro il più possibile.
+
+    5.2 Cambiamenti nelle strutture dati
+        Le strutture dati sono praticamente rimaste invariate rispetto a quelle del pdf se non per
+        un paio di campi in emergency_t.
+        La prima è l'utilizzo di rescuer_digital_twin** rescuer_dt con ** invece di *.
+        Questo perchè per come ho progettato il sistema un puntatore ad un array di puntatori di strutture
+        è molto più pratico di un puntatore ad array di strutture visto che utilizzo per gestire tutti
+        i soccorritori globali l'array global_gemelli_array. In questo modo quando un thread gestore
+        modifica lo stato di un soccorritore sta modificando l'istanza globale del gemello digitale. 
+        In questo modo non devo gestire le copie per poi andare a ricercare lo stesso modello da moficare.
+        Stessa modifica è stata fatta con emrgency_type_t* type invece che senza * per evitare di copiare
+        tutti i dati del tipo di emergenza per ogni emergenza aggiungendo overhead inutile.
+
+
+6. Istruzioni di compilazione ed esecuzione
+    Il programma come specificato è compatibile con Linux Ubuntu 24.04 ed è compatibile con la macchina
+    di laboratorio 2
+
+    6.1 Makefile
+        è incluso nello zip un makefile che ha i comandi make clean e make. Il make genera un eseguibile
+        chiamato ./emergency_server e un client chiamato ./client.
+
+    6.2 Esecuzione
+        Per eseguire correttamente bisogna aprire il server in un terminale e in un altro terminale invocare il client con argomenti in ordine ./client <nome emergenza> <x> <y> <delay>.
+        Es. ./client Incendio 10 10 0
+        è anche possibile passare le emergenze tramite file con ./client -f <nome_file.txt>.
+        Per terminare correttamente l'esecuzione bisogna digitale Ctrl+C nella finestra del server.
+        
      
 
 
