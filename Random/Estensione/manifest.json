@@ -1,0 +1,18 @@
+{
+  "manifest_version": 2,
+  "name": "Autologin Navigazione Wifi",
+  "version": "1.0",
+  "description": "Inserisce automaticamente le credenziali sulla pagina di login http://navigazione.wifi/login_registration.html.",
+  "icons": {
+    "48": "icons/icon-48.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://navigazione.wifi/login_registration.html"],
+      "js": ["content_script.js"]
+    }
+  ],
+  "permissions": [
+    "activeTab"
+  ]
+}

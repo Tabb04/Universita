@@ -1,0 +1,5 @@
+{
+  "name": "Impostatore Sveglie Rapide",
+  "description": "Crea pulsanti personalizzati per impostare rapidamente sveglie per il giorno successivo. Simula un'app Android 14.",
+  "requestFramePermissions": []
+}
