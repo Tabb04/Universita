@@ -6,19 +6,21 @@ Nella maggioranza dei casi un incidente ha una causa umana (75-95%).
 
 Nella nostra cultura si tende a dare l’errore all’utente (persona).
 
-La persona semplicemente porta a galla il problema.
+La persona semplicemente porta a galla il problema del prodotto.
 
 ## Motivazioni
 
-Si tende a progettare sistemi che pretendano le che persone lavorino con i sistemi al massimo dei livelli di attenzione.
+Si tende a progettare sistemi che pretendono che l’utente interagisca con essi al massimo dei livelli di attenzione.
 
-Presuppongo che il pensiero dell’utente permanga, mentre spesso l’utente sblocca automatismi (routine). Una distrazione è un interruzione di un golfo.
+Presupponiamo che il pensiero dell’utente permanga, mentre spesso l’utente sblocca automatismi (routine). 
 
-Riprendere dopo una distrazione diventa molto più difficile e oneroso come carico mentale. Dopo ciò l’utente più probabilmente commette **errori**.
+Qui possono avvenire **DISTRAZIONI**. Una distrazione è un interruzione di un golfo.
+
+Riprendere dopo una distrazione diventa molto più difficile e oneroso come carico mentale. Dopo una distrazione l’utente commette statisticamente più **errori**.
 
 Quindi o **distrazioni** o **automatismi**.
 
-**Es**. Iscrizione all’università. Dopo aver inserito CF e altri dati diverse volte per errori, quando arrivo alla parte importante sono già stanco mentalmente.
+**Es**. Iscrizione all’università. Dopo aver inserito CF e altri dati ripetute volte per errori di formattazione vari, all’arrivo alla parte importante sono già stanco mentalmente.
 
 **Es**. Il flag per dire che l’indirizzo di fatturazione e spedizione sono uguali. Da come parte in ogni caso assolve i requisiti ma in uno da una migliore esperienza utente. Esprimibile tramite user story.
 
@@ -31,7 +33,7 @@ Bisogna smettere di cercare il colpevole. Il colpevole è il designer. Dire che 
 Capire quale è stato l’insieme dei fattori che ha generato il problema.
 
 **Es**. Incidente in auto nelle stesse condizioni può avere effetti molti diversi.
-Questo perchè le dinamiche degli incidenti sono così tante che un piccolo cambio può determinare tanto.
+Questo perché le dinamiche degli incidenti sono così tante che un piccolo cambio può determinare tanto.
 
 Gli incidenti avvengono per **concatenazione di cause**. 
 
@@ -45,24 +47,24 @@ Quindi per aiutare posso o disallineare i buchi o fare i buchi più piccoli.
 **Es**. Come dire un numero di telefono o IBAN. L’iban è buona abitudine suddividere in parti utili.
 Se mi sento dire il numero di telefono con aggruppamento diverso è difficile da capire. L’aggruppamento è il ridurre la fetta di formaggio.
 
-## I 5 perchè
+## I 5 perché
 
-Devo cambiare il paradigma di programmazione assodando che gli utenti sbagliano. Noi facciamo design per persone che errano, è svogliata, distratta ecc., non progetto per l’umano ideale.
+Devo cambiare il paradigma di programmazione assodando che gli utenti sbagliano. Noi facciamo design per persone che errano, sono svogliate, distratte, non progettiamo per l’umano ideale.
 
 Toyoda ha inventato questa regola.
 
 <aside>
 💡
 
-**Non fermarsi al primo perchè, farsene almeno 5.**
+**Non fermarsi al primo perché, farsene almeno 5.**
 
 </aside>
 
-I periti fanno questa cosa, e non si fermano a 5 di perchè.
+I periti fanno questa cosa, e non si fermano a 5 di perché.
 
 ![image.png](17%20ottobre/image%201.png)
 
-**Es**. Utente non ha inviato un certo dato. Perchè? Non avevo segnalato che andava inserito? Perchè non l’ha visto? e così via.
+**Es**. Utente non ha inviato un certo dato. Perché? Non avevo segnalato che andava inserito? Perché non l’ha visto? Perché gli veniva segnalato solo in questo punto? …?
 
 ![image.png](17%20ottobre/image%202.png)
 
@@ -78,7 +80,7 @@ Nasce tra un disallineamento tra le capacità delle persone e come vengono reali
 
 Nell’era dell’AI è ancora più necessario un interfaccia fatta bene.
 
-Un errore è un qualsiasi discostamento dal comportamento esteso.
+Un errore è un qualsiasi discostamento dal comportamento atteso.
 
 # Classificazione degli errori
 
@@ -91,34 +93,38 @@ Ci sono due classi principali di errori:
 
 ## Slips
 
-**Es**. Voglio prendere la macchina ed esco con le chiavi della moto in mano.
+**Es**. Voglio prendere la macchina ed esco di casa con le chiavi della moto in mano.
 
 Questi errori escono perché spesso siamo molto inconsci nelle cose che facciamo di routine.
 
-### Action Based
+### 1. Action Based
 
-Pianifico bene l’azione ma la eseguo diversamente o in modo sbagliato
+Pianifico bene l’azione ma la eseguo diversamente o in modo sbagliato.
+**Es**. Metto il latte nel caffè e metto la tazza in frigo
 
-### Memory lapse
+### 2. Memory lapse
 
 Non eseguo proprio l’azione.
-**Es**. Non prendo proprio le chiavi.
+**Es**. Lascio il gas acceso.
 
 ## Mistakes
 
 Non ho realmente capito. Non si origina nella fase di azione, ma nella fase alta del golfo, nella pianificazione.
 
-### Rule Based
+### 1. Rule Based
 
-Sbaglio perché non conosco le regole del gioco.
+Sbaglio perché non conosco le regole del “gioco”.
 
-### Knowledge Based
+### 2. Knowledge Based
 
-Sbaglio perché non ho diagnosticato per conoscenza errata o incompleta.
+Sbaglio perché il problema è diagnosticato male per conoscenza errata o incompleta.
 **Es**. Disallineamento del modello mentale con il termostato. (esempio vecchio)
-**Es**. Un meccanico che ti dice che la batteria è ancora buona e di continuare ad usarla ma si fulmina il giorno dopo.
+**Es**. Un meccanico che ti dice che la batteria è ancora buona ma si fulmina il giorno dopo.
 
-### Memory lapse
+### 3. Memory lapse
+
+Dimenticanza agli stage del Goal e pianificazione.
+**Es**. Meccanico non ha fatto troubleshooting corretto perché si è dimenticato uno step. 
 
 I due Memory lapse sono diversi
 
@@ -135,12 +141,12 @@ Portano a memory-lapse. Dopo un interruzione è probabile anche dover ricomincia
 
 ## Feedback sbagliati
 
-I feedback eccessivi rovinano l’esperienza dell’utente esperto, perchè dopo che ignora quelli inutili ignora anche quelli utili.
+I feedback eccessivi rovinano l’esperienza dell’utente esperto, perché aver ignorato quelli inutili si ignorano anche quelli effettivamente utili.
 
-I Feedback vocali Sono ormai ritenuti disutili e fastidiosi.
+I Feedback vocali sono ormai ritenuti disutili e fastidiosi.
 **Es**. Distributore delle sigarette che parla sempre.
 
-Poi anche la voce mentre si legge interrompe spesso.
+Inoltre un voiceover mentre si legge può disturbare la lettura.
 
 # Prevenzione di errori
 
@@ -150,12 +156,12 @@ Bisogna fare:
 Es. Faccio sempre bonifici da 500 euro, oggi ne fai uno da 10.000. Mi interrompo e ti chiedo una conferma via mail.
 - **Possibilità di fare undo**
 - **Rendere facile per l’utente capire l’errore:**
-Es. Evidenziare di rosso il campo sbagliato in un inserimento dati e dico quale è l’errore (formattazione, caratteri ecc.)
+Es. Evidenziare di rosso il campo sbagliato in un inserimento dati e dire quale è l’errore (formattazione, caratteri ecc.)
 - **Non trattare le azioni dell’utente come errore**
 
 ## Aggiungere constraints per bloccare errori
 
-Più un sistema vincolato meno errori provoca.
+Più un sistema è vincolato meno errori provoca.
 
 Separare i moduli inoltre aiuta molto nel capire il software. Mescolo mapping e constrains e si chiamano **controlli segregati**.
 

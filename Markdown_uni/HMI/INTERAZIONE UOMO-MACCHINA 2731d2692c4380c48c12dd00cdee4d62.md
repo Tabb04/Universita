@@ -84,6 +84,8 @@
 
 [21 novembre pt. 2](INTERAZIONE%20UOMO-MACCHINA/21%20novembre%20pt%202%202b21d2692c43808fb236fccb66f0785d.md)
 
+# qui
+
 ## Metodi di ricerca qualitativa - PDF 20
 
 [27 novembre](INTERAZIONE%20UOMO-MACCHINA/27%20novembre%202b81d2692c4380c18a4bea2554bc4089.md)

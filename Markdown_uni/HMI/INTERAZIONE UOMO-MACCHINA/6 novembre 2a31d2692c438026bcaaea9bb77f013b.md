@@ -13,8 +13,8 @@ Non sono problemi separati, sono interconnessi
 ## 3 Pilastri del design scalabile
 
 - **Accessibilità**: Standards per design di interfacce che funzionano per tutti gli utenti, anche quelli con disabilità.
-- **Design Responsive**: Interfacce che si adattano ad ogni tipo di device
-- **Design Systems**: Framework e libreria per mantenere consistenza tra prodotti e teams
+- **Design Responsive**: Interfacce che si adattano ad ogni tipo di device.
+- **Design Systems**: Framework e libreria per mantenere consistenza tra prodotti e teams.
 
 **Obiettivo**: Costruire interfacce che sono accessibili e responsive per design, mantenute costantemente attraverso sistemi
 
@@ -60,7 +60,7 @@ Essential requirments (Livello AA)
 
 Gli user accedono tramite schermi di diverse dimensioni e rapporti: Smartphones, Tablets, Laptops, Wearables ecc.
 
-Il nostro design deve funzionare su tutto questo range
+Il nostro design deve funzionare su tutto questo range.
 
 ## Cosa è un design responsive
 
@@ -80,7 +80,7 @@ Tecniche chiave:
 
 ## Mobile-first approach
 
-Perchè pensare prima al mobile?
+Perché pensare prima al mobile?
 
 - Forza la prioritizzazione (spazio limitato = focus sulle cose essenziali)
 - Più facile progressivamente aumentare che degradare
@@ -172,7 +172,7 @@ Es.
 - Voglio esperienza consistente tra schermi
 - **Es**. Email clients, app di produttività
 
-## Responsive Patterns: LAYOUT SHIFTER
+## 4. Responsive Patterns: LAYOUT SHIFTER
 
 **Più flessibile, più complesso**:
 
@@ -187,13 +187,13 @@ Es.
 - Quando mobile e desktop devono avere esperienze differenti
 - Applicazioni complesse
 
-## Responsive Patterns: OFF CANVAS
+## 5. Responsive Patterns: OFF CANVAS
 
 **Nasconde contenuto off-screen**
 
 - Navigazione o contenuti secondari nascosti di default (su mobile)
 - Mostrato tramite hamburger menù
-- Sermpre visibile su schermi larghi
+- Sempre visibile su schermi larghi
 
 ![image.png](6%20novembre/image%205.png)
 
@@ -214,7 +214,7 @@ I dispositivi mobile introducono nuovi paradigmi di interazione
 
 ## Responsive Images & Media
 
-Problema: Mandare immagini grandi da desktop a mobile spreca manda
+Problema: Mandare immagini grandi da desktop a mobile spreca banda
 
 Soluzioni:
 
@@ -247,7 +247,7 @@ Implicazione di design:
 
 ---
 
-# 1. DESIGN SYSTEMS
+# 3. DESIGN SYSTEMS
 
 ## Problema di consistenza
 
@@ -270,7 +270,9 @@ System design include:
 
 - Libreria di componenti
 - Design tokens
-- Ecc..
+- Guidlines e documentazione
+- Implementazioni di codice
+- Ecc…
 
 ## Benefici di Design Systems
 

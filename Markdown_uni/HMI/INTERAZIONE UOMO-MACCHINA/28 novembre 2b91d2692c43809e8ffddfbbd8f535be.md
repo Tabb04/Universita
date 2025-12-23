@@ -23,7 +23,7 @@ Da ricerca qualitativa (comprendere) a larghezza quantitativa (misurazione).
 
 </aside>
 
-## Quando usare la ricerca quantitiativa
+## Quando usare la ricerca quantitativa
 
 Ideale per:
 
@@ -96,11 +96,11 @@ Aiutano a capire:
 Tipi di surveys:
 
 - **Descrittivi**: Come è la distribuzione? Quanto è comune?
-- Analitici: Che relazioni esistono? Cosa predicono?
+- **Analitici**: Che relazioni esistono? Cosa predicono?
 
 Non buoni per:
 
-- Misurazionidi performance oggettive
+- Misurazioni di performance oggettive
 - Stabilire causalità
 
 ## Pianificare uno studio questionario
@@ -121,7 +121,7 @@ Non buoni per:
 
 **Possono essere:**
 
-- **Domande** aperte (poco usate)
+- Domande **aperte** (poco usate)
 - Domande **chiuse**: Si o No, Scale a punti dispari solitamente
 
 **Scale di Likert:**
@@ -135,7 +135,7 @@ Non buoni per:
 
 - Popolazione: Tutti i potenziali user
 - Sampling frame: Quelli contattabili
-- Sample: Chi hai invitato
+- Sample: Chi ho invitato
 - Respondents: Chi completa il survey
 
 **Sampling strategies:**
@@ -166,7 +166,7 @@ Migliorare response rate:
 
 # 3. DESIGN SPERIMENTALE
 
-## Perche esperimenti?
+## Perché esperimenti?
 
 Permettono di:
 
@@ -178,13 +178,13 @@ Permettono di:
 Quanto usare esperimenti?
 
 - Testare ipotesi specifiche
-- Misurare performane
+- Misurare performance
 - Valutare algoritmi
 
 <aside>
 💡
 
-**Esperimenti danno comparazioni controllate e possono stabili causalità**.
+**Esperimenti danno comparazioni controllate e possono stabilire causalità**.
 
 </aside>
 
@@ -221,7 +221,8 @@ Quanto usare esperimenti?
 <aside>
 💡
 
-Ipotesi: IV ha effetto su DV: Es “Input touch sarà più veloce di input mouse”.
+Ipotesi: IV ha effetto su DV: 
+**Es** “Input touch sarà più veloce di input mouse”.
 
 </aside>
 
@@ -299,7 +300,7 @@ Studi HCI tipici:
 <aside>
 💡
 
-Per medium effect size, 80% potenza: necessito 64 parteciipanti per gruppo
+Per medium effect size, 80% potenza: necessito 64 partecipanti per gruppo
 
 </aside>
 
@@ -313,20 +314,20 @@ Per medium effect size, 80% potenza: necessito 64 parteciipanti per gruppo
 ### Statistica descrittiva
 
 - **Misure delle tendenze** (Media, Mediana, Moda)
-- Misure della diffusione (Deviazione standard, Range, Range Interquartile)
-- Visualizzazioni (Istogrammi, Box-plots, Bar Charts)
+- **Misure della diffusione** (Deviazione standard, Range, Range Interquartile)
+- **Visualizzazioni** (Istogrammi, Box-plots, Bar Charts)
 
 ## Testing delle ipotesi: Logica
 
 1. Assumo ipotesi nulla è vera
 2. Calcolo: Quanto è probabile che i risultati siano così estremi **se $H_0$ è vera**?
 3. Se molto poco probabile (p<0.05), rifiuto $H_0$
-4. Se non è abbastanza imporbabile, fallisco a rifiutare $H_0$
+4. Se non è abbastanza improbabile, fallisco a rifiutare $H_0$
 
 <aside>
 💡
 
-P-value = probabilità di avere risultati così estremi se l’ipotesi nulla è vera
+P-value = probabilità di avere risultati così estremi se l’ipotesi nulla è vera.
 
 </aside>
 
