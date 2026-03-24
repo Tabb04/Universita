@@ -92,7 +92,8 @@ int main(int argc, char* argv[]){
     int promisc;
     struct bpf_program fcode;
 
-    bpf_u_int32 net, mask;  //per rilevare maschera di rete e ip
+    bpf_u_int32 net;    //Indirizzo IP rilevato
+    bpf_u_int32 mask;   //Maschera rilevata
     
 
     //Scorre le flags passate. Le flag possibili sono: h, i, l, v, f, w
