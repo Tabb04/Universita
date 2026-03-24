@@ -1,6 +1,13 @@
 {
     "configurations": [
         {
+            "type": "java",
+            "name": "Main",
+            "request": "launch",
+            "mainClass": "Main",
+            "projectName": "Codice_993f750e"
+        },
+        {
             "name": "C/C++: gcc build and debug active file",
             "type": "cppdbg",
             "request": "launch",
