@@ -144,22 +144,22 @@ int drop_privileges(const char *username) {
 /*
  * The time difference in microseconds
  */
-long delta_time (struct timeval * now,
-                 struct timeval * before) {
+long delta_time (struct timeval * now, struct timeval * before){ // Serve a calcolare la differenza in microsecondi tra l'inizio del programma (startTime) e ora
   time_t delta_seconds;
   time_t delta_microseconds;
 
   /*
-   * compute delta in second, 1/10's and 1/1000's second units
-   */
+  compute delta in second, 1/10's and 1/1000's second units
+  */
   delta_seconds      = now -> tv_sec  - before -> tv_sec;
   delta_microseconds = now -> tv_usec - before -> tv_usec;
 
-  if(delta_microseconds < 0) {
+  if(delta_microseconds < 0){
     /* manually carry a one from the seconds field */
     delta_microseconds += 1000000;  /* 1e6 */
     -- delta_seconds;
   }
+  
   return((delta_seconds * 1000000) + delta_microseconds);
 }
 
@@ -381,6 +381,7 @@ void dummyProcesssPacket(u_char *_deviceId,
     else
       printf("[eth_type=0x%04X]", eth_type);
 
+    //Stampa dimensioni del pacchetto per intero e senza payload(quello che analizziamo)
     printf("[caplen=%u][len=%u]\n", h->caplen, h->len);
   }
 
@@ -530,7 +531,7 @@ int main(int argc, char* argv[]) {
 
   print_stats();
 
-  pcap_close(pd);
+  pcap_close(pd); 
 
   if(dumper)
     pcap_dump_close(dumper);
