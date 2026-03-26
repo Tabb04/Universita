@@ -1,15 +1,4 @@
 /*
-Test modifica indirizzo broadcast hardcoded
-
-
--------------------------------------------------------------------------------------------
-
-*/
-
-
-
-
-/*
  *
  * Prerequisite
  * sudo apt-get install libpcap-dev
@@ -18,9 +7,9 @@ Test modifica indirizzo broadcast hardcoded
  *
 */
 
-
-#include <sys/types.h>
-
+#define __FAVOR_BSD
+#define _DEFAULT_SOURCE
+//Aggiunte per evitare warning
 
 #include <pcap/pcap.h>
 #include <sys/stat.h>
@@ -38,6 +27,7 @@ pcap_t  *pd;
 int verbose = 0;
 struct pcap_stat pcapStats;
 
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
@@ -243,7 +233,7 @@ void my_sigalarm(int sig) {
 
 static char hex[] = "0123456789ABCDEF";
 
-char* etheraddr_string(const u_char *ep, char *buf) {
+char* etheraddr_string(const unsigned char *ep, char *buf) {
   u_int i, j;
   char *cp;
 
@@ -344,14 +334,14 @@ char* proto2str(u_short proto) {
 
 static int32_t thiszone;
 
-void dummyProcesssPacket(u_char *_deviceId,
+void dummyProcesssPacket(unsigned char *_deviceId,
 			 const struct pcap_pkthdr *h,
-			 const u_char *p) {
+			 const unsigned char *p) {
 
   // printf("pcap_sendpacket returned %d\n", pcap_sendpacket(pd, p, h->caplen));
 
   if(dumper)
-    pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)h, p);
+    pcap_dump((unsigned char*)dumper, (struct pcap_pkthdr*)h, p);
   
   if(verbose) {
     struct ether_header ehdr;
@@ -413,8 +403,6 @@ void printHelp(void) {
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_if_t *devpointer;
 
-
-
   printf("Usage: pcount [-h] -i <device|path> [-w <path>] [-f <filter>] [-l <len>] [-v <1|2>]\n");
   printf("-h               [Print help]\n");
   printf("-i <device|path> [Device name or file path]\n");
@@ -444,26 +432,17 @@ void printHelp(void) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, *bpfFilter = NULL;
-  u_char c;
+  unsigned char c;
   char errbuf[PCAP_ERRBUF_SIZE];
   int promisc, snaplen = DEFAULT_SNAPLEN;
   struct bpf_program fcode;
   struct stat s;
 
-  /*
-  QUI AGGIUNGO LE VARIABILI PER LA MASCHERA DI RETE RILEVATA
-  */
-
-  bpf_u_int32 net, mask;
-
-
-
   startTime.tv_sec = 0;
   thiszone = gmt_to_local(0);
 
-
   while((c = getopt(argc, argv, "hi:l:v:f:w:")) != '?') {
-      if((c == 255) || (c == (u_char)-1)) break;  //Restituisce -1 quando ha finito di leggere gli argomenti (255 è l'unsigned di -1)
+    if((c == 255) || (c == (unsigned char)-1)) break;
 
     switch(c) {
     case 'h':
@@ -478,7 +457,7 @@ int main(int argc, char* argv[]) {
     case 'l':
       snaplen = atoi(optarg);
       break;
-    
+
     case 'v':
       verbose = atoi(optarg);
       break;
@@ -512,16 +491,10 @@ int main(int argc, char* argv[]) {
 
   if(stat(device, &s) == 0) {
     /* Device is a file on filesystem */
-    if((pd = pcap_open_offline(device, errbuf)) == NULL) {  
+    if((pd = pcap_open_offline(device, errbuf)) == NULL) {
       printf("pcap_open_offline: %s\n", errbuf);
       return(-1);
     }
-    /*
-    Se offline presumo maschera su rete /24
-    */
-
-    mask = 0xFFFFFF00;
-
   } else {
     /* hardcode: promisc=1, to_ms=500 */
     promisc = 1;
@@ -530,16 +503,8 @@ int main(int argc, char* argv[]) {
       return(-1);
     }
   }
-
-  /*Chiedo quale è la vera maschera*/
-  if (pcap_lookupnet(device, &net, &mask, errbuf) == -1){
-    fprintf(stderr, "Netmask non trovata per %s: %s\n", device, errbuf);
-    mask = 0xFFFFFF00;
-  }
-
-
   if(bpfFilter != NULL) {
-    if(pcap_compile(pd, &fcode, bpfFilter, 1, mask) < 0) {
+    if(pcap_compile(pd, &fcode, bpfFilter, 1, 0xFFFFFF00) < 0) {
       printf("pcap_compile error: '%s'\n", pcap_geterr(pd));
     } else {
       if(pcap_setfilter(pd, &fcode) < 0) {

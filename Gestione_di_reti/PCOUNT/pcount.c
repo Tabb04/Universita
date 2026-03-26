@@ -7,10 +7,6 @@
  *
 */
 
-
-#include <sys/types.h>
-
-
 #include <pcap/pcap.h>
 #include <sys/stat.h>
 #include <signal.h>
@@ -27,6 +23,7 @@ pcap_t  *pd;
 int verbose = 0;
 struct pcap_stat pcapStats;
 
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
@@ -144,22 +141,22 @@ int drop_privileges(const char *username) {
 /*
  * The time difference in microseconds
  */
-long delta_time (struct timeval * now, struct timeval * before){ // Serve a calcolare la differenza in microsecondi tra l'inizio del programma (startTime) e ora
+long delta_time (struct timeval * now,
+                 struct timeval * before) {
   time_t delta_seconds;
   time_t delta_microseconds;
 
   /*
-  compute delta in second, 1/10's and 1/1000's second units
-  */
+   * compute delta in second, 1/10's and 1/1000's second units
+   */
   delta_seconds      = now -> tv_sec  - before -> tv_sec;
   delta_microseconds = now -> tv_usec - before -> tv_usec;
 
-  if(delta_microseconds < 0){
+  if(delta_microseconds < 0) {
     /* manually carry a one from the seconds field */
     delta_microseconds += 1000000;  /* 1e6 */
     -- delta_seconds;
   }
-  
   return((delta_seconds * 1000000) + delta_microseconds);
 }
 
@@ -381,7 +378,6 @@ void dummyProcesssPacket(u_char *_deviceId,
     else
       printf("[eth_type=0x%04X]", eth_type);
 
-    //Stampa dimensioni del pacchetto per intero e senza payload(quello che analizziamo)
     printf("[caplen=%u][len=%u]\n", h->caplen, h->len);
   }
 
@@ -402,8 +398,6 @@ void dummyProcesssPacket(u_char *_deviceId,
 void printHelp(void) {
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_if_t *devpointer;
-
-
 
   printf("Usage: pcount [-h] -i <device|path> [-w <path>] [-f <filter>] [-l <len>] [-v <1|2>]\n");
   printf("-h               [Print help]\n");
@@ -443,9 +437,8 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt_to_local(0);
 
-
   while((c = getopt(argc, argv, "hi:l:v:f:w:")) != '?') {
-      if((c == 255) || (c == (u_char)-1)) break;  //Restituisce -1 quando ha finito di leggere gli argomenti (255 è l'unsigned di -1)
+    if((c == 255) || (c == (u_char)-1)) break;
 
     switch(c) {
     case 'h':
@@ -460,7 +453,7 @@ int main(int argc, char* argv[]) {
     case 'l':
       snaplen = atoi(optarg);
       break;
-    
+
     case 'v':
       verbose = atoi(optarg);
       break;
@@ -494,7 +487,7 @@ int main(int argc, char* argv[]) {
 
   if(stat(device, &s) == 0) {
     /* Device is a file on filesystem */
-    if((pd = pcap_open_offline(device, errbuf)) == NULL) {  
+    if((pd = pcap_open_offline(device, errbuf)) == NULL) {
       printf("pcap_open_offline: %s\n", errbuf);
       return(-1);
     }
@@ -531,7 +524,7 @@ int main(int argc, char* argv[]) {
 
   print_stats();
 
-  pcap_close(pd); 
+  pcap_close(pd);
 
   if(dumper)
     pcap_dump_close(dumper);

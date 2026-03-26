@@ -32,7 +32,9 @@
 
 
 //aggiunto perché a compilazione non mi trovava optarg
-#include <bits/getopt_core.h>
+//#include <bits/getopt_core.h>
+//Forse ho risolto lo tolgo
+
 
 #define DEFAULT_MASK 0xFFFFFF00  //Predefinita /24
 #define ALARM_SLEEP 1   //Timer ogni quanto segnalare di stampare il riassunto
@@ -82,6 +84,43 @@ int32_t gmt_to_local(time_t t) {
 
 /**************************************************************/
 
+//Stampa i numeri in modo leggibile (ES. 1'000'000 invece di 1000000)
+char* format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals){
+    u_int a1 = ((u_long)val / 1000000000) % 1000;	
+    u_int a = ((u_long)val / 1000000) % 1000;
+    u_int b = ((u_long)val / 1000) % 1000;
+    u_int c = (u_long)val % 1000;
+    u_int d = (u_int)((val - (u_long)val)*100) % 100;
+
+    if(add_decimals) {
+        if(val >= 1000000000){
+        snprintf(buf, buf_len, "%u'%03u'%03u'%03u.%02d", a1, a, b, c, d);
+        } else if(val >= 1000000){
+            snprintf(buf, buf_len, "%u'%03u'%03u.%02d", a, b, c, d);
+        } else if(val >= 100000){
+            snprintf(buf, buf_len, "%u'%03u.%02d", b, c, d);
+        } else if(val >= 1000){
+            snprintf(buf, buf_len, "%u'%03u.%02d", b, c, d);
+        } else
+            snprintf(buf, buf_len, "%.2f", val);
+    } else{
+        if(val >= 1000000000){
+            snprintf(buf, buf_len, "%u'%03u'%03u'%03u", a1, a, b, c);
+        } else if(val >= 1000000){
+            snprintf(buf, buf_len, "%u'%03u'%03u", a, b, c);
+        } else if(val >= 100000){
+            snprintf(buf, buf_len, "%u'%03u", b, c);
+        } else if(val >= 1000){
+            snprintf(buf, buf_len, "%u'%03u", b, c);
+        } else
+            snprintf(buf, buf_len, "%u", (unsigned int)val);
+    }
+    return(buf);
+}
+
+
+/**************************************************************/
+
 
 
 int drop_privilegi(const char* username){
@@ -96,6 +135,11 @@ int drop_privilegi(const char* username){
     }
 
     pw = getpwnam(username);    //recupera la password di "nobody"
+
+    if(pw == NULL) {
+        username = "nobody";
+        pw = getpwnam(username);
+    }
 
     //se trovo nobody faccio il declassamento
     if (pw != NULL){
@@ -146,6 +190,11 @@ void stampa_stats(){
     struct timeval endTime;     //Orario attuale
     float deltaSec; //Secondi totali trascorsi
     struct pcap_stat pcapStat;
+    static u_int64_t lastPkts = 0;
+    u_int64_t diff; //Differenza di pacchetti arrivati nell'ultimo intervallo di tempo
+    char buf1[64], buf2[64];    //Buffer per scrivere i numeri formattati prima di stamparli.
+
+
 
     /*
     Se StartTime è 0 vuol dire che in dummyProcess non sono ancora arrivato
@@ -165,11 +214,40 @@ void stampa_stats(){
     Popola pcapStats con:
         ps_recv (pacchetti ricevuti e che hanno passato il filtro), 
         ps_drop (pacchetti droppati dal kernel per buffer troppo pieno)
-        ps_ifdrop (pacchetti droppati dall'interfaccia per congestione a livello fisico)
+        ps_ifdrop (pacchetti droppati dalla scheda di rete prima di arrivare al kernel per congestione a livello fisico)
     */
     if(pcap_stats(pd, &pcapStat) >= 0){ 
+        fprintf(stderr, "=========================\n"
+            "Statistiche assolute: [%u pkts rcvd][%u pkts dropped]\n"
+            "Pacchetti Totali=%u/Droppati=%.1f %%\n",
+            pcapStat.ps_recv, pcapStat.ps_drop, pcapStat.ps_recv-pcapStat.ps_drop,
+            pcapStat.ps_recv == 0 ? 0 : (double)(pcapStat.ps_drop*100)/(double)pcapStat.ps_recv 
+        );
 
+        //Calcolo la velocità media totale in Mbit/s
+        fprintf(stderr, "%llu pkts [%.1f pkt/sec] - %llu bytes [%.2f Mbit/sec]\n",
+            numPkts, (double)numPkts/deltaSec,
+            numBytes, (double)8*numBytes/(double)(deltaSec*1000000)
+        );
+
+        if(lastTime.tv_sec > 0){
+            deltaSec = (double)delta_time(&endTime, &lastTime)/1000000;
+            diff = numPkts - lastPkts;
+            fprintf(stderr, "=========================\n"
+	            "Statistiche reali: %s pkts [%.1f ms][%s pkt/sec]\n",
+	            format_numbers(diff, buf1, sizeof(buf1), 0), deltaSec*1000,
+	            format_numbers(((double)diff/(double)(deltaSec)), buf2, sizeof(buf2), 1));
+
+            //Aggiorno col numero totale di pacchetti attuali, in preparazione per il prossimo giro.
+            lastPkts = numPkts;
+        }
+
+        fprintf(stderr, "=========================\n");
     }
+
+    //Salvo il tempo attuale (endTime) dentro la variabile statica lastTime
+    lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
+
 
 }
 
@@ -197,7 +275,7 @@ void sigproc(int sig){
 
 
 void mio_sigalarm(int sig){
-    //stampa_stats()
+    stampa_stats();
     alarm(ALARM_SLEEP);
     signal(SIGALRM, mio_sigalarm);
 }
@@ -327,7 +405,7 @@ void dummyProcessPacket(unsigned char* _deviceId, const struct pcap_pkthdr* h, c
 
     if(dumper){
         //Se avevo l'opzione di salvare su file, prende pacchetto grezzo e suoi metadati e li scrive su disco
-        pcap_dump((unsigned char)dumper, (struct pcap_pkthdr*)h, p);    //tipo h per evitare warning
+        pcap_dump((unsigned char*)dumper, (struct pcap_pkthdr*)h, p);    //tipo h per evitare warning
     }
 
     if(verbose){
@@ -340,7 +418,7 @@ void dummyProcessPacket(unsigned char* _deviceId, const struct pcap_pkthdr* h, c
 
 
         int s = (h->ts.tv_sec + thiszone) % 86400;  //secondi passati dall'inizio del giorno
-        printf("%02d:%02d:%02d.%06u", s/3600, (s/3600)/60, s%60, (unsigned)h->ts.tv_usec);  //Orario quando accade l'evento
+        printf("%02d:%02d:%02d.%06u ",s/3600, (s%3600)/60, s%60, (unsigned)h->ts.tv_usec);  //Orario quando accade l'evento
 
         //Copio i primi byte dell'header in eth_head
         memcpy(&ehdr, p, sizeof(struct ether_header));  
@@ -447,7 +525,7 @@ void stampa_aiuto(){
 
 int main(int argc, char* argv[]){
 
-    unsigned char c;
+    int c;
     char* device = NULL;
     char* filtrobpf = NULL;
     int snaplung = 256;
@@ -467,8 +545,8 @@ int main(int argc, char* argv[]){
     //Scorre le flags passate. Le flag possibili sono: h, i, l, v, f, w
     //Se hanno ":" dopo vuol dire che insieme al flag va passato un valore
     //Se non è trovato uno di quei caratteri getopt restituisce '?'
-    while((c = getopt(argc, argv, "hi:l:v:f:w:")) != '?'){
-        if ((c == 255) || (c == (unsigned char)-1)) break;  //quando ha letto tutti i flag restituisce -1
+    while((c = getopt(argc, argv, "hi:l:v:f:w:")) != -1){
+        //if ((c == 255) || (c == (unsigned char)-1)) break;  //quando ha letto tutti i flag restituisce -1
 
         switch(c){
 
@@ -520,7 +598,7 @@ int main(int argc, char* argv[]){
         }
     }
  
-    if (getuid() != 0){
+    if (geteuid() != 0){
         //Se non sono in sudo
         //Mi serve perché devo ascoltare in modalità promisqua (anche dati non diretti al mio pc)
         printf("Per favore esegui come superuser\n");
@@ -555,17 +633,20 @@ int main(int argc, char* argv[]){
         promisc = 1;
         //pcap_open_live: passo il device, la lunghezza di quanto voglio leggere, 1 perché in modalità promisqua
         //500 per 500ms e il buffer di errrore.
+
+        /* Cerco quale è la maschera giusta */
+        if(pcap_lookupnet(device, &net, &mask, errbuf) == -1){
+            fprintf(stderr, "Maschera di rete non trovata per %s: %s\n", device, errbuf);
+            mask = DEFAULT_MASK;
+        }
+        
         if((pd = pcap_open_live(device, snaplung, promisc, 500, errbuf)) == NULL){
             printf("pcap_open_live: %s\n", errbuf);
             return(-1);
         }
     }
 
-    /* Cerco quale è la maschera giusta */
-    if(pcap_lookupnet(device, &net, &mask, errbuf) == -1){
-        fprintf(stderr, "Maschera di rete non trovata per %s: %s\n", device, errbuf);
-        mask = DEFAULT_MASK;
-    }
+
 
 
     /*
@@ -614,7 +695,7 @@ int main(int argc, char* argv[]){
     */
     pcap_loop(pd, -1, dummyProcessPacket, NULL);   
     
-    //stampa_stats()
+    stampa_stats();
 
 
     pcap_close(pd); //Chiude la sessione di cattura
