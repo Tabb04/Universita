@@ -11,6 +11,9 @@
 #define _DEFAULT_SOURCE
 //Aggiunte per evitare warning
 
+#define _GNU_SOURCE
+//strstr() mi dava segmentation fault, penso perché sui pacchetti non ho la terminazione in \0 allora uso memmem()
+
 #include <pcap/pcap.h>
 #include <sys/stat.h>
 #include <signal.h>
@@ -28,7 +31,7 @@
 pcap_t *pd_in;
 pcap_t *pd_out;
 
-volatile int keep_running = 1;
+volatile int looping = 1;
 
 int verbose = 0;
 struct pcap_stat pcapStats;
@@ -222,7 +225,7 @@ void print_stats() {
 //Siccome non ho più pcap_loop cambio anche come catturo il ctrlc
 void sigproc(int sig) {
   fprintf(stderr, "\nRicevuto segnale di interruzione. Chiusura in corso...\n");
-  keep_running = 0; // Questo farà terminare il nostro futuro ciclo while
+  looping = 0; // Questo farà terminare il nostro futuro ciclo while
 }
 
 /* ******************************** */
@@ -353,6 +356,7 @@ void printHelp(void) {
 	printf("-l <len>         [Capture length]\n");
 	printf("-v <mode>        [Verbose [1: verbose, 2: very verbose (print payload)]]\n");
     printf("-o <device>      [Output/Bridge Device name]\n");
+    printf("-b <string>      [Blocco pacchetti contenenti questa stringa (es. nome dominio)]\n");
 
 	if(pcap_findalldevs(&devpointer, errbuf) == 0) {
 	int i = 0;
@@ -374,7 +378,7 @@ void printHelp(void) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-	char *device = NULL, *device_out = NULL, *bpfFilter = NULL;
+	char *device = NULL, *device_out = NULL, *bpfFilter = NULL, *blocked_domain = NULL;
 	unsigned char c;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	int promisc, snaplen = DEFAULT_SNAPLEN;
@@ -384,7 +388,7 @@ int main(int argc, char* argv[]) {
 	startTime.tv_sec = 0;
 	thiszone = gmt_to_local(0);
 
-	while((c = getopt(argc, argv, "hi:l:v:f:")) != '?') {
+	while((c = getopt(argc, argv, "hi:o:l:v:f:b:")) != '?') {
 	    if((c == 255) || (c == (unsigned char)-1)) break;
 
 	    switch(c) {
@@ -408,7 +412,11 @@ int main(int argc, char* argv[]) {
         case 'o':
             device_out = strdup(optarg);
             break;
-    
+        
+        case 'b':
+            blocked_domain = strdup(optarg);
+            break;
+        
 	    case 'f':
 	        bpfFilter = strdup(optarg);
 	        break;
@@ -451,7 +459,10 @@ int main(int argc, char* argv[]) {
     
     printf("Bridging attivo: %s <--> %s\n", device, device_out);
 
-
+	//Chiesto a Gemini mi ha suggerito di mettere queste due righe
+	//evito loop/eco
+	pcap_setdirection(pd_in, PCAP_D_IN);
+	pcap_setdirection(pd_out, PCAP_D_IN);
 	
     /*
 	if(bpfFilter != NULL) {
@@ -495,9 +506,11 @@ int main(int argc, char* argv[]) {
 
 
 
+	
 	if(drop_privileges("nobody") < 0)
 	  return(-1);
 	
+
 	signal(SIGINT, sigproc);
 	signal(SIGTERM, sigproc);
 
@@ -511,13 +524,20 @@ int main(int argc, char* argv[]) {
     /**************************************************************** */
     
     printf("\nInoltro pacchetti...\n");
-    
-    while(keep_running){
+
+
+	size_t blocked_len = 0;
+	if(blocked_domain != NULL){
+		blocked_len = strlen(blocked_domain);
+	}
+
+    while(looping){
 
         fd_set readfds; //È una specie di bitmask per i fileds
         struct timeval tv;
-        struct pcap_pkthdr* header;
+        struct pcap_pkthdr* header; //Dove metto i dait
         const unsigned char* pkt_data;
+        int res;
         
 
         FD_ZERO(&readfds);  //svuoto
@@ -532,7 +552,7 @@ int main(int argc, char* argv[]) {
         int ret = select(max_fd + 1, &readfds, NULL, NULL, &tv);
 
         if(ret < 0){
-            if (errno == EINTR) continue;
+            if (errno == EINTR) continue;   //ctrlc
             perror("Errore select");
             break;
         } else if(ret == 0){
@@ -540,22 +560,64 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
-        if(FD_ISSET(fd_in, &readfds)){
+        if(FD_ISSET(fd_in, &readfds)){  //controllo se fd_in è settato	
             res = pcap_next_ex(pd_in, &header, &pkt_data);
+            
+            //invio all'altra interfaccia
+            if(res == 1){
+
+				int scarta = 0;	//prima usavo continue, ma in quel caso mi avrebbe potuto scartare un pacchetto dall'altro latoì
+                //Filtro manuale
+                if(blocked_domain != NULL){
+                    //anche se inefficiente cerco la stringa all'interno dei byte del pacchetto
+                    if(memmem(pkt_data, header->caplen, blocked_domain, blocked_len) != NULL){
+						if(verbose == 1){
+                        	printf("Pacchetto scartato contentete '%s' da dal device %s\n", blocked_domain, device);
+                    	}
+						scarta = 1;
+					}
+                }
+				if(!scarta){
+					if((pcap_sendpacket(pd_out, pkt_data, header->caplen)) != 0){
+						fprintf(stderr, "Errore invio su %s: %s", device_out, pcap_geterr(pd_out));
+					} else if(verbose == 1){
+						printf("Inoltrato pacchetto da %s a %s di %d bytes\n", device, device_out, header->len);
+					}
+				}
+            }
         }
+        //Identico per pacchetto dall'altro
+        if(FD_ISSET(fd_out, &readfds)){
+            res = pcap_next_ex(pd_out, &header, &pkt_data);
 
+            if(res == 1){
 
+				int scarta = 0;
+                //Filtro manuale
+                if(blocked_domain != NULL){
+                    //anche se inefficiente cerco la stringa all'interno dei byte del pacchetto
+                    if(memmem(pkt_data, header->caplen, blocked_domain, blocked_len) != NULL){
+						if(verbose == 1){
+                        	printf("Pacchetto scartato contentete '%s' da dal device %s\n", blocked_domain, device);
+                    	}
+                    	scarta = 1;
+					}
+                }
+				if(!scarta){
+					if((pcap_sendpacket(pd_in, pkt_data, header->caplen))!= 0){
+						fprintf(stderr, "Errore invio su %s: %s", device, pcap_geterr(pd_in));
+					} else if(verbose == 1){
+						printf("Inoltrato pacchetto da %s a %s di %d bytes\n", device_out, device, header->len);
+					}
+				}
+            }
+        }
     }
 
-    
+    printf("Uscita dal bridge\n");
 
 
-
-
-
-
-    
-
+    /*********************************************** */
 
 	//print_stats();
 

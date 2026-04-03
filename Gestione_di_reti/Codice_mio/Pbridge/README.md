@@ -9,6 +9,11 @@ Da scrivere
 
 5. Non efficiente, altra opzione non bloccante forse?7
 
+6. Lasciato anche modalità 
+
+7. IMPORTANTE. SICCOME SPECIFICA "NOME A DOMINIO" non posso usare i filtri ma devo analizzare il payload
+perché viaggia a livello applicativo. È molto inefficiente, deep packet inspection
+
 Timeout di 1 secondo:
 In sintesi, è come dire al programma: "Mettiti in ascolto, ma se per un secondo intero non vola una mosca, fai un respiro, controlla che io non ti abbia chiesto di spegnerti, e poi rimettiti in ascolto".
 
@@ -19,6 +24,14 @@ Se ad esempio fd_in è 3 e fd_out è 4, max_fd sarà 4. Passando 4 + 1 = 5, dici
 Altri due NULL dice di Ignorare i controlli sulla scrittura e di non monitorare robe che non ci interessano.
 
 restituisce valore > 0: Almeno un file descriptor ha dei dati pronti (successo).
+
+
+
+res = pcap_next_ex(pd_in, &header, &pkt_data);
+Primo handler, secondo dove salvo header, terzo puntatore ai dati.
+
+
+
 
 
 
