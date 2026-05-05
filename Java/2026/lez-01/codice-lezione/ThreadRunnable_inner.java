@@ -1,4 +1,5 @@
-public class ThreadRunnable {
+
+public class ThreadRunnable_inner {
     
     //Faccio una inner class che sarà ciò che passo come parametro al mio thread 
     public static class MyRunnable implements Runnable {
