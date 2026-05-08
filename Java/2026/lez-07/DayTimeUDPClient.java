@@ -11,7 +11,7 @@ public class DayTimeUDPClient{
 
             socket.setSoTimeout(15000);
             InetAddress host = InetAddress.getByName(HOSTNAME);
-            DatagramPacket request = new DatagramPacket(new byte[1], 1, host, PORT);
+            DatagramPacket request = new DatagramPacket(new byte[1], 1, host, PORT);    //Basta mandare una richiesta con qualsiasi cosa e risponde
             DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
 
             socket.send(request);
