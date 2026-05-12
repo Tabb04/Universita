@@ -1,0 +1,119 @@
+{
+  "user1": {
+    "username": "user1",
+    "password": "nuovapass",
+    "gamesPlayed": 0,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 0,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "Luca": {
+    "username": "Luca",
+    "password": "pass1",
+    "gamesPlayed": 0,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 0,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "Mirko": {
+    "username": "Mirko",
+    "password": "pass3",
+    "gamesPlayed": 0,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 0,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "mario": {
+    "username": "mario",
+    "password": "pass123",
+    "gamesPlayed": 0,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 0,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "luigi": {
+    "username": "luigi",
+    "password": "passFinale",
+    "gamesPlayed": 3,
+    "gamesWon": 0,
+    "globalScore": 18,
+    "puzzlesCompleted": 3,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      3
+    ],
+    "history": {
+      "0": {
+        "score": 6,
+        "mistakes": 0,
+        "won": false
+      },
+      "1": {
+        "score": 6,
+        "mistakes": 0,
+        "won": false
+      }
+    }
+  }
+}
