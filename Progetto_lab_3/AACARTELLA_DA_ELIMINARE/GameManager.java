@@ -17,8 +17,7 @@ import server.NioServer;
  * allo scadere del tempo, oltre a mantenere uno storico statistico.
  */
 public class GameManager {
-    private final String datasetFilePath; // Percorso del file JSON
-    private int totalGamesCount = 0;
+    private final List<WordDataset.GameData> allGames; // Tutte le partite lette dal JSON
     private final AtomicReference<Game> currentGame = new AtomicReference<>(); // Riferimento thread-safe alla partita attiva
     private final ScheduledExecutorService scheduler; // Scheduler per il timer della partita
     private final long gameDurationSeconds; // Durata della singola partita
@@ -36,8 +35,8 @@ public class GameManager {
     }
     private final Map<Integer, HistoricalGameStats> pastGames = new ConcurrentHashMap<>();
 
-    public GameManager(String datasetFilePath, long durationSeconds, NioServer server) {
-        this.datasetFilePath = datasetFilePath;
+    public GameManager(List<WordDataset.GameData> dataset, long durationSeconds, NioServer server) {
+        this.allGames = dataset;
         this.gameDurationSeconds = durationSeconds;
         this.server = server;
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -47,10 +46,8 @@ public class GameManager {
      * Avvia la prima partita e imposta il timer ricorrente.
      */
     public void start() {
-        this.totalGamesCount = WordDataset.countGames(datasetFilePath);
-        System.out.println("[GAMEMANAGER] Trovate " + totalGamesCount + " partite nel file " + datasetFilePath);
-        if (totalGamesCount <= 0) {
-            System.err.println("Dataset vuoto o inesistente, impossibile avviare GameManager.");
+        if (allGames == null || allGames.isEmpty()) {
+            System.err.println("Dataset vuoto, impossibile avviare GameManager.");
             return;
         }
         startNextGame();
@@ -89,27 +86,20 @@ public class GameManager {
             pastGames.put(stats.gameId, stats);
         }
 
-        // Scegliamo una nuova partita casualmente, on-demand tramite stream
-        WordDataset.GameData data = null;
-        int retries = 0;
-        
-        while (data == null && retries < 10) {
-            int targetIndex = random.nextInt(totalGamesCount);
-            WordDataset.GameData candidate = WordDataset.loadGameAtIndex(datasetFilePath, targetIndex);
-            
-            if (candidate != null) {
-                // Se non l'abbiamo ancora giocata o se è il decimo tentativo (ci accontentiamo)
-                if (!pastGames.containsKey(candidate.gameId) || retries == 9) {
-                    data = candidate;
-                }
+        // Scegliamo una nuova partita casualmente, preferendo quelle non ancora giocate
+        List<WordDataset.GameData> availableGames = new java.util.ArrayList<>();
+        for (WordDataset.GameData g : allGames) {
+            if (!pastGames.containsKey(g.gameId)) {
+                availableGames.add(g);
             }
-            retries++;
         }
         
-        // Se proprio fallisce tutto, carichiamo la primissima partita
-        if (data == null) {
-            data = WordDataset.loadGameAtIndex(datasetFilePath, 0);
+        // Se le abbiamo giocate tutte, peschiamo liberamente tra tutte
+        if (availableGames.isEmpty()) {
+            availableGames.addAll(allGames);
         }
+        
+        WordDataset.GameData data = availableGames.get(random.nextInt(availableGames.size()));
         
         // Creiamo la nuova istanza della partita e la impostiamo atomicamente
         Game newGame = new Game(data, gameDurationSeconds);

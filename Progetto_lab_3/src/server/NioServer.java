@@ -27,19 +27,21 @@ import server.User;
  * Server NIO principale che accetta connessioni TCP e smista le richieste
  * ad un Thread Pool per l'elaborazione. Gestisce anche l'invio di notifiche UDP.
  */
-public class NioServer {
+
+
+public class NioServer{
     private final int port;
-    private final ExecutorService workerPool; // Pool di thread (CachedThreadPool) per gestire le richieste in parallelo
+    private final ExecutorService workerPool; //Ho optato per un cached
     private GameManager gameManager; // Gestore del ciclo di gioco
     private final Gson gson;
     private Selector selector;
     private ServerSocketChannel serverChannel;
     private DatagramSocket udpSocket;
     
-    // Mappa globale per memorizzare gli utenti registrati
+    //Mappa globale per salvare gli utenti registrati
     private final ConcurrentHashMap<String, User> registeredUsers = new ConcurrentHashMap<>();
     
-    // Mappa per associare una connessione TCP (SocketChannel) a un utente loggato
+    //Mappa per associare un SocketChannel a un utente loggato
     private final ConcurrentHashMap<SocketChannel, User> activeConnections = new ConcurrentHashMap<>();
     
     // Mappa per associare un utente loggato alla sua porta UDP (per le notifiche asincrone)

@@ -62,6 +62,44 @@
       0
     ]
   },
+  "Francesco": {
+    "username": "Francesco",
+    "password": "cazzo",
+    "gamesPlayed": 3,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 3,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      3
+    ],
+    "history": {
+      "221": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "857": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "666": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      }
+    }
+  },
   "mario": {
     "username": "mario",
     "password": "pass123",

@@ -1,35 +1,37 @@
 package server;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Map;
-import java.util.HashMap;
+import java.util.*;
 
-public class User {
+public class User{
     private String username;
     private String password;
     
-    // STATISTICHE GLOBALI
+    
     private int gamesPlayed = 0;
     private int gamesWon = 0;
     private int globalScore = 0;
     
-    // Statistiche personali (NYT style)
+
     private int puzzlesCompleted = 0;
     private int puzzlesWon = 0;
     private int puzzlesLost = 0;
     private int currentStreak = 0;
     private int maxStreak = 0;
     private int perfectPuzzles = 0;
-    // 0-3 errori vinti, 4 persi, 5 non finiti
+
+    /*Array strutturato come:
+        Posizione [0-3]: Partite vinte con i errori
+        Posizione [4]: Partite perse con 4 errori
+        Posizione [5]: Partite perse per tempo
+    */
     private int[] mistakeHistogram = new int[6];
     
-    // Storico dei risultati delle partite precedenti per questo utente
-    public static class GameResult {
+    //Storico dei risultati delle partite precedenti dell'utente
+    public static class GameResult{
         public int score;
         public int mistakes;
         public boolean won;
-        public GameResult(int score, int mistakes, boolean won) {
+        public GameResult(int score, int mistakes, boolean won){
             this.score = score;
             this.mistakes = mistakes;
             this.won = won;
@@ -37,7 +39,7 @@ public class User {
     }
     private Map<Integer, GameResult> history = new HashMap<>();
 
-    // Stato transient (non salvato su JSON persistente) per il gioco in corso
+    //Stato transient (non salvato su JSON persistente) per il gioco in corso
     private transient Integer currentGameId = -1;
     private transient Set<String> currentFoundGroups = new HashSet<>();
     private transient int currentMistakes = 0;

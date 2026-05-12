@@ -1,12 +1,14 @@
 package server;
 
 import common.ConfigReader;
+import server.*;
 import server.GameManager;
 import server.WordDataset;
 import server.NioServer;
 import server.PersistenceManager;
 
 import java.util.List;
+
 
 //PUNTO DI INGRESSO PRINCIPALE PER IL SERVER
 
@@ -21,19 +23,32 @@ public class ServerMain{
 
         String datasetPath = config.getProperty("server.words.dataset.path", "data/words.json");
 
-        long timerSeconds = config.getIntProperty("server.timer.seconds", 300); //default 5 minuti
-
-        //Rimosso vecchio caricamento in blocco delle parole ora uso streaming API
-        System.out.println("Dataset configurato: " + datasetPath);
+        long timerSeconds = config.getIntProperty("server.timer.seconds", 300);     //default 5 minuti
         
 
+
+        //2. CARICO DATASET DELLE PAROLE
+        System.out.println("Caricamento dataset: " + datasetPath);
+
+        //È una lista di: gameId e 4 insiemi di 4 parole e una tema.
+        List<WordDataset.GameData> dataset = WordDataset.loadDataset(datasetPath);
+
+        if(dataset == null || dataset.isEmpty()){
+            System.err.println("Impossibile caricare il dataset. Chiusura.");
+            return;
+        }
+
+
+        
         //3. INIZIALIZZO SERVER NIO
         NioServer server = new NioServer(port);
         
+    //--------------------------------------------------------
 
 
-        //4. Inizializza Gestore Gioco (GameManager)
-        GameManager gameManager = new GameManager(datasetPath, timerSeconds, server);
+
+        // 4. Inizializza Gestore Gioco (GameManager)
+        GameManager gameManager = new GameManager(dataset, timerSeconds, server);
         server.setGameManager(gameManager);
         
         // 5. Persistenza: carica utenti precedenti e avvia timer di salvataggio in background

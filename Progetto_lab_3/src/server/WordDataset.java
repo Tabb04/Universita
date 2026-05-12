@@ -6,25 +6,56 @@ import java.io.FileReader;
 import java.lang.reflect.Type;
 import java.util.List;
 
-public class WordDataset {
-    public static class Group {
+public class WordDataset{
+    public static class Group{
         public String theme;
         public List<String> words;
     }
-    
-    public static class GameData {
+
+    public static class GameData{
         public int gameId;
         public List<Group> groups;
     }
-    
-    public static List<GameData> loadDataset(String filePath) {
-        try (FileReader reader = new FileReader(filePath)) {
-            Gson gson = new Gson();
-            Type listType = new TypeToken<List<GameData>>(){}.getType();
-            return gson.fromJson(reader, listType);
-        } catch (Exception e) {
-            System.err.println("Errore nel caricamento del dataset di parole: " + e.getMessage());
-            return null;
+
+    //Facccio che non sono sicuro che i game siano descritti come il file dato
+    //dove sono tutti con Id in ordine, quindi voglio prima calcolarmi quanti game ci sono
+    //per poi avere un numero da generare casualmente per la scelta
+
+    public static int countGames(String filePath){
+        int count = 0;
+
+        //Devo usare questa formattazione altrimenti non mi funziona solo JsonReader
+        try(com.google.gson.stream.JsonReader reader = new com.google.gson.stream.JsonReader(new FileReader(filePath))){
+            reader.beginArray();
+            while(reader.hasNext()){
+                reader.skipValue();
+                count++;
+            }
+            reader.endArray();
+        }catch(Exception e){
+            System.err.println("Errore durante il conteggio dei game: " + e.getMessage());
         }
+
+        return count;
+    }
+
+    public static GameData loadGameAtIndex(String filePath, int targetIndex){
+        try(com.google.gson.stream.JsonReader reader = new com.google.gson.stream.JsonReader(new FileReader(filePath))){
+            Gson gson = new Gson();
+            reader.beginArray();
+            int currentIndex = 0;
+            while(reader.hasNext()){
+                if(currentIndex == targetIndex){
+                    return gson.fromJson(reader, GameData.class);
+                }else{
+                    reader.skipValue();
+                    currentIndex++;
+                }
+            }
+            reader.endArray();
+        } catch (Exception e) {
+            System.err.println("Errore nel caricamento del gioco on-demand: " + e.getMessage());
+        }
+        return null;
     }
 }

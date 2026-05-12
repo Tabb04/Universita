@@ -9,5 +9,9 @@
         "data_types.h": "c",
         "stdio.h": "c"
     },
-    "C_Cpp.errorSquiggles": "enabled"
+    "C_Cpp.errorSquiggles": "enabled",
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar",
+        "Progetto_lab_3/lib/gson-2.10.1.jar"
+    ]
 }
