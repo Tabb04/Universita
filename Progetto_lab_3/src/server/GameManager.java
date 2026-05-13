@@ -119,13 +119,14 @@ public class GameManager {
 
         // Pianifichiamo la fine della partita allo scadere del tempo
         scheduler.schedule(() -> {
-            System.out.println("[GAMEMANAGER] Tempo scaduto per la partita ID " + currentGame.get().getGameId());
-            // Chiudiamo le sessioni per i giocatori e inviamo un messaggio di fine partita
-            if (server != null) {
-                server.broadcastGameEnd(currentGame.get().getGameId());
-            }
-            // Iniziamo la partita successiva
+            int endedGameId = currentGame.get().getGameId();
+            System.out.println("[GAMEMANAGER] Tempo scaduto per la partita ID " + endedGameId);
+            // Prima avviamo la nuova partita: questo cristallizza le stats di quella conclusa in pastGames
             startNextGame();
+            // Poi notifichiamo i client: le statistiche sono ora già disponibili nello storico
+            if (server != null) {
+                server.broadcastGameEnd(endedGameId);
+            }
         }, gameDurationSeconds, TimeUnit.SECONDS);
     }
 

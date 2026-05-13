@@ -14,7 +14,12 @@
     C. Commentato
 
 4. User.java
+    A. Tutto appuntatom, fatto. Ricorda inizializzazione lazy di Gson che skippa costruttore.
 
 
 
-AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER -> USER
+APPUNTI PER RELAZIONE
+- AI per if (this.currentFoundGroups == null), inizializzazione lazy di GSON dove bypassa il costruttore
+- Scelta del threadpool, forse fixed con calcolo delle cpu sarebbe stato meglio ma boh
+
+AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER

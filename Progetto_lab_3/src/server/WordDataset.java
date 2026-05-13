@@ -17,15 +17,14 @@ public class WordDataset{
         public List<Group> groups;
     }
 
-    //Facccio che non sono sicuro che i game siano descritti come il file dato
-    //dove sono tutti con Id in ordine, quindi voglio prima calcolarmi quanti game ci sono
-    //per poi avere un numero da generare casualmente per la scelta
 
+    //Voglio sapere il numero di games presenti per i bound del numero casuale
     public static int countGames(String filePath){
         int count = 0;
 
         //Devo usare questa formattazione altrimenti non mi funziona solo JsonReader
         try(com.google.gson.stream.JsonReader reader = new com.google.gson.stream.JsonReader(new FileReader(filePath))){
+            //Uguale come a lezione
             reader.beginArray();
             while(reader.hasNext()){
                 reader.skipValue();
@@ -39,11 +38,13 @@ public class WordDataset{
         return count;
     }
 
+    //Funzione per cercare un game dato l'indice casuale
     public static GameData loadGameAtIndex(String filePath, int targetIndex){
         try(com.google.gson.stream.JsonReader reader = new com.google.gson.stream.JsonReader(new FileReader(filePath))){
             Gson gson = new Gson();
             reader.beginArray();
             int currentIndex = 0;
+
             while(reader.hasNext()){
                 if(currentIndex == targetIndex){
                     return gson.fromJson(reader, GameData.class);
@@ -52,10 +53,13 @@ public class WordDataset{
                     currentIndex++;
                 }
             }
+            
             reader.endArray();
-        } catch (Exception e) {
-            System.err.println("Errore nel caricamento del gioco on-demand: " + e.getMessage());
+            
+        }catch(Exception e){
+            System.err.println("Errore nel caricamento del gioco con indice " + targetIndex + ": " + e.getMessage());
         }
+        
         return null;
     }
 }

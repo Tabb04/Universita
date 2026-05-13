@@ -31,8 +31,7 @@ public class ServerMain{
         NioServer server = new NioServer(port);
         
 
-
-        //4. Inizializza Gestore Gioco (GameManager)
+        //4. INIZIALIZZO IL GESTORE DEL GIOCO
         GameManager gameManager = new GameManager(datasetPath, timerSeconds, server);
         server.setGameManager(gameManager);
         

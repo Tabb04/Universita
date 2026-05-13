@@ -1,10 +1,7 @@
 package server;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.util.ArrayList;
-import java.util.List;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -33,72 +30,52 @@ import server.User;
 
 public class NioServer{
     private final int port;
-    private final ExecutorService workerPool;   //Optato per cachedThreadPool
-    private GameManager gameManager;
+    private final ExecutorService workerPool;   //Ho optato per un cached
+    private GameManager gameManager;            // ???? Gestore del ciclo di gioco
     private final Gson gson;
     private Selector selector;
     private ServerSocketChannel serverChannel;
     private DatagramSocket udpSocket;
-
+    
     //Mappa globale per salvare gli utenti registrati
     private final ConcurrentHashMap<String, User> registeredUsers = new ConcurrentHashMap<>();
-
+    
     //Mappa per associare un SocketChannel a un utente loggato
     private final ConcurrentHashMap<SocketChannel, User> activeConnections = new ConcurrentHashMap<>();
-
-
-    // Mappa per associare un utente loggato alla sua porta UDP per notifiche asincrone
+    
+    // Mappa per associare un utente loggato alla sua porta UDP (per le notifiche asincrone)
     private final ConcurrentHashMap<String, InetSocketAddress> userUdpAddresses = new ConcurrentHashMap<>();
 
-
-    public NioServer(int port){
+    public NioServer(int port) {
         this.port = port;
         this.workerPool = Executors.newCachedThreadPool();
         this.gson = new Gson();
     }
 
-    public void setGameManager(GameManager gameManager){
+    public void setGameManager(GameManager gameManager) {
         this.gameManager = gameManager;
     }
+    
+    public GameManager getGameManager() { return this.gameManager; }
+    public ConcurrentHashMap<String, User> getRegisteredUsers() { return this.registeredUsers; }
+    public ConcurrentHashMap<SocketChannel, User> getActiveConnections() { return this.activeConnections; }
+    public ConcurrentHashMap<String, InetSocketAddress> getUserUdpAddresses() { return this.userUdpAddresses; }
 
-    public GameManager getGameManager(){
-        return this.gameManager;
-    }
-
-    public ConcurrentHashMap<String, User> getRegisteredUsers(){
-        return this.registeredUsers;
-    }
-
-    public ConcurrentHashMap<SocketChannel, User> getActiveConnections(){
-        return this.activeConnections;
-    }
-
-    public ConcurrentHashMap<String, InetSocketAddress> getUserUdpAddresses(){
-        return this.userUdpAddresses;
-    }
-
-
-
-    //AVVIO SERVER NIO E ASCOLTO SULLA PORTA DATA
-
-    public void start() throws IOException{
+    /**
+     * Avvia il server NIO e il listener sulla porta.
+     */
+    public void start() throws IOException {
         selector = Selector.open();
-
-
-        //Nella soluzione dell'ultimo assigment ho visto che skippa .socket()
-        //e fa la bind direttamente sull'oggetto ServerSocketChannel quindi faccio anche qui così
+        
+        // Configuriamo il canale del server come non bloccante
         serverChannel = ServerSocketChannel.open();
-
         serverChannel.bind(new InetSocketAddress(port));
-        
         serverChannel.configureBlocking(false);
-        
         serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-
-
-        //Apriamo un socket UDP per l'invio delle notifiche.
+        
+        // Apriamo un socket UDP standard per l'invio delle notifiche fire-and-forget.
         udpSocket = new DatagramSocket();
-
+        
         System.out.println("[SERVER] In ascolto sulla porta TCP " + port);
 
         // Loop principale del Selettore
@@ -111,8 +88,7 @@ public class NioServer{
                 SelectionKey key = iter.next();
                 iter.remove();
 
-                if (!key.isValid())
-                    continue;
+                if (!key.isValid()) continue;
 
                 if (key.isAcceptable()) {
                     acceptConnection(key); // Nuova connessione TCP in entrata
@@ -188,18 +164,16 @@ public class NioServer{
      */
     private void processMessage(SocketChannel clientChannel, String message) {
         try {
-            // Tenta il parsing della richiesta (il messaggio deve finire con un marker o
-            // essere un JSON valido,
-            // per semplicità qui assumiamo che il client invii JSON completi ad ogni
-            // invio).
+            // Tenta il parsing della richiesta (il messaggio deve finire con un marker o essere un JSON valido,
+            // per semplicità qui assumiamo che il client invii JSON completi ad ogni invio).
             JsonRequest request = gson.fromJson(message, JsonRequest.class);
-
+            
             // Smistamento logica al processore
             JsonResponse response = CommandProcessor.process(request, clientChannel, this);
 
             // Invia il risultato indietro
             sendResponse(clientChannel, response);
-
+            
         } catch (Exception e) {
             e.printStackTrace();
             JsonResponse err = JsonResponse.error(400, "Richiesta malformata o errore server.");
@@ -224,41 +198,13 @@ public class NioServer{
     }
 
     /**
-     * Invia un pacchetto UDP a tutti i client loggati per avvisarli del termine
-     * della partita.
-     * Il payload include le statistiche della partita conclusa e la classifica
-     * globale,
-     * come richiesto dalla specifica (Sez. 2.2, pag. 6).
+     * Invia un pacchetto UDP a tutti i client loggati per avvisarli del termine della partita.
      */
     public void broadcastGameEnd(int gameId) {
         JsonObject payload = new JsonObject();
         payload.addProperty("event", "GAME_ENDED");
         payload.addProperty("gameId", gameId);
-
-        // Statistiche della partita conclusa (equivalente a requestGameStats per
-        // partita finita)
-        GameManager.HistoricalGameStats stats = gameManager.getHistoricalStats(gameId);
-        if (stats != null) {
-            payload.addProperty("totalParticipants", stats.totalParticipants);
-            payload.addProperty("finishedParticipants", stats.finishedParticipants);
-            payload.addProperty("wonParticipants", stats.wonParticipants);
-            payload.addProperty("averageScore", stats.averageScore);
-        }
-
-        // Classifica globale ordinata per punteggio (equivalente a requestLeaderboard)
-        List<User> userList = new ArrayList<>(registeredUsers.values());
-        userList.sort((u1, u2) -> Integer.compare(u2.getGlobalScore(), u1.getGlobalScore()));
-        JsonArray leaderArray = new JsonArray();
-        for (int i = 0; i < userList.size(); i++) {
-            User u = userList.get(i);
-            JsonObject entry = new JsonObject();
-            entry.addProperty("rank", i + 1);
-            entry.addProperty("username", u.getUsername());
-            entry.addProperty("globalScore", u.getGlobalScore());
-            leaderArray.add(entry);
-        }
-        payload.add("leaderboard", leaderArray);
-
+        
         String message = gson.toJson(payload);
         byte[] buffer = message.getBytes(StandardCharsets.UTF_8);
 
