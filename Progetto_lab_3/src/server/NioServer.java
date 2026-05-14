@@ -101,51 +101,57 @@ public class NioServer{
 
         System.out.println("[SERVER] In ascolto sulla porta TCP " + port);
 
-        // Loop principale del Selettore
-        while (!Thread.interrupted()) {
-            selector.select(); // Si blocca finché non c'è attività
-            Set<SelectionKey> selectedKeys = selector.selectedKeys();
-            Iterator<SelectionKey> iter = selectedKeys.iterator();
 
-            while (iter.hasNext()) {
+
+        //LOOP SELECTOR
+        while(true){
+
+            //Tutto uguale come a lezione
+            selector.select();
+            Set <SelectionKey> selectedKeys = selector.selectedKeys();
+            Iterator <SelectionKey> iter = selectedKeys.iterator();
+
+            while(iter.hasNext()){
                 SelectionKey key = iter.next();
                 iter.remove();
 
-                if (!key.isValid())
+                //Non faccio la try, controllo su cosa potrebbe darmi l'eccezione
+                if(!key.isValid())
                     continue;
 
-                if (key.isAcceptable()) {
-                    acceptConnection(key); // Nuova connessione TCP in entrata
-                } else if (key.isReadable()) {
-                    readRequest(key); // Dati disponibili da leggere
+                //Casi trattati sotto
+                if(key.isAcceptable()){
+                    acceptConnection(key);
+                }else if(key.isReadable()){
+                    handleRead(key);   
                 }
             }
         }
     }
 
-    /**
-     * Accetta la nuova connessione TCP dal client.
-     */
-    private void acceptConnection(SelectionKey key) throws IOException {
-        ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
-        SocketChannel clientChannel = ssc.accept();
-        clientChannel.configureBlocking(false);
-        // Ogni connessione registra il proprio buffer per leggere i dati JSON
-        clientChannel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(8192));
-        System.out.println("[SERVER] Nuova connessione TCP da " + clientChannel.getRemoteAddress());
+
+    //ACCETTA CONNESSIONE
+    private void acceptConnection(SelectionKey key) throws IOException{
+
+        ServerSocketChannel server = (ServerSocketChannel) key.channel();
+        SocketChannel client = server.accept();
+        client.configureBlocking(false);
+
+        client.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(8192)); //8KB ci entra tutto, predefinito dei buffered stream
+        System.out.println("[SERVER] Nuova connessione TCP da " + client.getRemoteAddress());
     }
 
-    /**
-     * Legge la stringa JSON dal canale del client e la passa al worker.
-     */
-    private void readRequest(SelectionKey key) {
+
+    //LEGGO STRINGA JSON DAL CANALE E LA PASSO AL WORKER
+    private void handleRead(SelectionKey key){
         SocketChannel clientChannel = (SocketChannel) key.channel();
         ByteBuffer buffer = (ByteBuffer) key.attachment();
 
-        try {
+        try{
             int bytesRead = clientChannel.read(buffer);
-            if (bytesRead == -1) {
-                // Il client ha chiuso bruscamente la connessione
+            if(bytesRead == -1){    //Ha mandato chiusura
+
+                //Client ha chiuso la connessione
                 handleDisconnection(clientChannel);
                 return;
             }
@@ -153,45 +159,44 @@ public class NioServer{
             buffer.flip();
             byte[] data = new byte[buffer.remaining()];
             buffer.get(data);
-            String message = new String(data, StandardCharsets.UTF_8).trim();
-            buffer.compact(); // Prepara per le letture successive (se ci sono frammentazioni)
+            String message = new String(data, StandardCharsets.UTF_8).trim();   //Trim per gli whitespace, nell'assigment usava solo un parametro
+            buffer.compact();
 
-            if (!message.isEmpty()) {
-                // Sottomette l'elaborazione al pool in modo asincrono
+            if(!message.isEmpty()){
+
                 workerPool.submit(() -> processMessage(clientChannel, message));
             }
-        } catch (IOException e) {
+        }catch(IOException e){
             handleDisconnection(clientChannel);
         }
     }
 
-    /**
-     * Rimuove l'utente dalle mappe attive se si disconnette.
-     */
-    private void handleDisconnection(SocketChannel clientChannel) {
-        try {
+
+    //Gestisco disconnessione dell'utente
+    private void handleDisconnection(SocketChannel clientChannel){
+        try{
+            //Per tcp il canale è la chiave, per udp è l'utente
             User u = activeConnections.remove(clientChannel);
-            if (u != null) {
+            if(u != null){
                 userUdpAddresses.remove(u.getUsername());
                 System.out.println("[SERVER] Utente disconnesso: " + u.getUsername());
-            } else {
-                System.out.println("[SERVER] Client anonimo disconnesso");
+            }else{
+                System.out.println("[SERVER] Client anonimo disconnesso");  //Se non era loggato
             }
+
             clientChannel.close();
-        } catch (IOException ex) {
-            ex.printStackTrace();
+        }catch(IOException e){
+            e.printStackTrace();
         }
     }
 
     /**
-     * Eseguito dal thread worker per calcolare la risposta corretta.
+     * Eseguito dal thread worker per calcolare la risposta corretta. ???
      */
-    private void processMessage(SocketChannel clientChannel, String message) {
-        try {
-            // Tenta il parsing della richiesta (il messaggio deve finire con un marker o
-            // essere un JSON valido,
-            // per semplicità qui assumiamo che il client invii JSON completi ad ogni
-            // invio).
+    private void processMessage(SocketChannel clientChannel, String message){
+        try{
+            
+            //Parso la richiesta, formattazione la controlo prima dell'invio nel client
             JsonRequest request = gson.fromJson(message, JsonRequest.class);
 
             // Smistamento logica al processore

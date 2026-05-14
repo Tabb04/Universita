@@ -100,6 +100,34 @@
       }
     }
   },
+  "AltroUtente": {
+    "username": "AltroUtente",
+    "password": "pass1",
+    "gamesPlayed": 1,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 1,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "history": {
+      "286": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      }
+    }
+  },
   "mario": {
     "username": "mario",
     "password": "pass123",
@@ -149,6 +177,67 @@
       },
       "1": {
         "score": 6,
+        "mistakes": 0,
+        "won": false
+      }
+    }
+  },
+  "Utentetest": {
+    "username": "Utentetest",
+    "password": "pass",
+    "gamesPlayed": 1,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 1,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "history": {
+      "292": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      }
+    }
+  },
+  "Mattia": {
+    "username": "Mattia",
+    "password": "cazzo",
+    "gamesPlayed": 2,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 2,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      2
+    ],
+    "history": {
+      "502": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "853": {
+        "score": 0,
         "mistakes": 0,
         "won": false
       }

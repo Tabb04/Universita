@@ -1,10 +1,10 @@
 package common;
 
-/**
- * Costanti per le operazioni e i codici di errore.
- */
-public class Constants {
-    // Operazioni
+//COSTANTI
+
+public class Constants{
+
+    //Operazioni
     public static final String OP_REGISTER = "register";
     public static final String OP_UPDATE_CREDENTIALS = "updateCredentials";
     public static final String OP_LOGIN = "login";
@@ -15,7 +15,7 @@ public class Constants {
     public static final String OP_REQUEST_LEADERBOARD = "requestLeaderboard";
     public static final String OP_REQUEST_PLAYER_STATS = "requestPlayerStats";
     
-    // Codici Errore
+    //Codici Errore (stile http è bellino)
     public static final int ERR_INVALID_REQUEST = 100;
     public static final int ERR_ALREADY_REGISTERED = 101;
     public static final int ERR_AUTH_FAILED = 102;

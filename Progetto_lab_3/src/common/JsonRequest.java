@@ -2,38 +2,39 @@ package common;
 
 import java.util.List;
 
-/**
- * Mappa una richiesta JSON dal Client al Server.
- * Contiene tutti i possibili campi per semplicità (saranno null se non usati in una specifica operation).
- */
-public class JsonRequest {
-    public String operation;
+//MAPPO richiesta Json da Client al Server
+//Se un campo non è usato ina una operazione è null
+
+
+public class JsonRequest{
+    public String operation;    //Da questo deciso cosa fare in process di CommmandProcessor
+                                //Costanti definite in "Costants.java"
     
-    // Campi utente
-    public String name;
+    //Campi dell'utente
+    public String name;         //Questo lo uso per registrare
     public String psw;
-    public String username;
+    public String username;     //Questo lo uso per login
     
-    // Per submitProposal
+    //Per submitProposal
     public List<String> words;
     
-    // Per updateCredentials
+    //Per updateCredentials
     public String oldName;
     public String newName;
     public String oldPsw;
     public String newPsw;
     
-    // Per info e stats
+    //Per info e stats
     public Integer gameId;
     
-    // Per leaderboard
+    //Per leaderboard
     public String playerName;
     public Integer topPlayers;
     
-    // Campo aggiuntivo per scambiare la porta UDP
+    //Porta UDP mandata a login
     public Integer udpPort;
     
-    public JsonRequest(String operation) {
+    public JsonRequest(String operation){
         this.operation = operation;
     }
 }

@@ -2,49 +2,63 @@ package server;
 
 import java.util.*;
 
-/**
- * Rappresenta lo stato di una partita globale di Connections.
- */
-public class Game {
+
+//RAPPRESENTA LO STATO DI UNA PARTITA GLOBALMENTE
+
+public class Game{
     private final int gameId;
     private final WordDataset.GameData data;
     private final long startTimeMillis;
     private final long durationMillis;
-    private final List<String> allWords; 
+    private final List<String> allWords;    //Tutte le 16 parole
     
-    public Game(WordDataset.GameData data, long durationSeconds) {
+
+    public Game(WordDataset.GameData data, long durationSeconds){
         this.gameId = data.gameId;
         this.data = data;
         this.startTimeMillis = System.currentTimeMillis();
         this.durationMillis = durationSeconds * 1000;
         
+
+        //Itero per aggiungere tutte le parole della partita
         List<String> words = new ArrayList<>();
-        for (WordDataset.Group g : data.groups) {
+        for(WordDataset.Group g : data.groups) {
             words.addAll(g.words);
         }
-        Collections.shuffle(words, new Random());
-        this.allWords = Collections.unmodifiableList(words);
+
+        Collections.shuffle(words, new Random());   //Non c'è bisogno usi il random efficiente per thread
+        this.allWords = words;
     }
     
-    public int getGameId() { return gameId; }
-    
-    public List<String> getAllWords() { return allWords; }
-    
-    public long getRemainingTimeSeconds() {
-        long elapsed = System.currentTimeMillis() - startTimeMillis;
-        long remaining = durationMillis - elapsed;
-        return remaining > 0 ? remaining / 1000 : 0;
+
+    public int getGameId(){
+        return gameId;
     }
     
-    public WordDataset.GameData getData() { return data; }
+    public List<String> getAllWords(){
+        return allWords;
+    }
     
-    public WordDataset.Group checkProposal(List<String> proposal) {
-        if (proposal == null || proposal.size() != 4) return null;
-        for (WordDataset.Group g : data.groups) {
-            if (new HashSet<>(g.words).containsAll(proposal) && new HashSet<>(proposal).containsAll(g.words)) {
+    public long getRemainingTimeSeconds(){
+        return (durationMillis - (System.currentTimeMillis() - startTimeMillis)) / 1000;
+    }
+
+    
+    public WordDataset.GameData getData(){
+        return data;
+    }
+    
+    public WordDataset.Group checkProposal(List<String> proposal)
+    {
+        if (proposal == null) return null;
+        for (WordDataset.Group g : data.groups){
+
+            //Uso un hashset perché non mi improta dell'ordine
+            if (new HashSet<>(g.words).equals(new HashSet<>(proposal))) {
                 return g;
             }
         }
         return null;
     }
+
 }

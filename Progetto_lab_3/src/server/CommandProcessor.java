@@ -19,99 +19,151 @@ import java.util.HashSet;
 
 /**
  * Elabora i comandi inviati dal client in base al campo 'operation'.
- * Ogni metodo implementa le regole e produce un JsonResponse coerente.
+ * Ogni metodo implementa le regole e produce un JsonResponse coerente.???
  */
-public class CommandProcessor {
 
-    public static JsonResponse process(JsonRequest req, SocketChannel channel, NioServer server) {
-        if (req == null || req.operation == null) {
+public class CommandProcessor{
+
+    public static JsonResponse process(JsonRequest req, SocketChannel channel, NioServer server){
+
+        //Controlli di sicurezza visto che li faccio anche nel client.
+        if(req == null || req.operation == null){
             return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Operazione non specificata.");
         }
 
-        switch (req.operation) {
+
+        switch(req.operation){
+
             case Constants.OP_REGISTER:
                 return handleRegister(req, server);
+
             case Constants.OP_LOGIN:
                 return handleLogin(req, channel, server);
+
             case Constants.OP_LOGOUT:
                 return handleLogout(channel, server);
+
             case Constants.OP_SUBMIT_PROPOSAL:
                 return handleSubmitProposal(req, channel, server);
+
             case Constants.OP_UPDATE_CREDENTIALS:
                 return handleUpdateCredentials(req, channel, server);
+
             case Constants.OP_REQUEST_GAME_INFO:
                 return handleGameInfo(req, channel, server);
+
             case Constants.OP_REQUEST_GAME_STATS:
                 return handleGameStats(req, channel, server);
+
             case Constants.OP_REQUEST_LEADERBOARD:
                 return handleLeaderboard(req, channel, server);
+
             case Constants.OP_REQUEST_PLAYER_STATS:
                 return handlePlayerStats(channel, server);
+
             default:
                 return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Operazione sconosciuta: " + req.operation);
         }
     }
 
-    private static JsonResponse handleRegister(JsonRequest req, NioServer server) {
-        if (req.name == null || req.psw == null || req.name.trim().isEmpty()) {
+
+
+    //TUTTI GLI HANDLE
+
+
+    private static JsonResponse handleRegister(JsonRequest req, NioServer server){
+
+        if(req.name == null || req.psw == null || req.name.trim().isEmpty()){
             return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Nome utente o password mancanti.");
         }
+
         
-        String username = req.name.trim();
-        synchronized (server.getRegisteredUsers()) {
-            if (server.getRegisteredUsers().containsKey(username)) {
-                return JsonResponse.error(Constants.ERR_ALREADY_REGISTERED, "L'utente " + username + " esiste già.");
+        String name = req.name.trim();
+
+        //Prendo la mappa degli utenti registrati
+        synchronized(server.getRegisteredUsers()){
+            if(server.getRegisteredUsers().containsKey(name)){
+                return JsonResponse.error(Constants.ERR_ALREADY_REGISTERED, "Utente " + name + " esiste già.");
             }
-            User newUser = new User(username, req.psw);
-            server.getRegisteredUsers().put(username, newUser);
+
+            User newUser = new User(name, req.psw);
+            server.getRegisteredUsers().put(name, newUser); //È concurrent tanto
         }
-        return JsonResponse.success(new JsonObject());
+        return JsonResponse.success(new JsonObject());  //Payload vuoto
     }
 
-    private static JsonResponse handleLogin(JsonRequest req, SocketChannel channel, NioServer server) {
-        if (req.username == null || req.psw == null) {
+
+//---------------------------------------------------------------------------------------
+
+
+    private static JsonResponse handleLogin(JsonRequest req, SocketChannel channel, NioServer server){
+
+        if (req.username == null || req.psw == null){
             return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Username o password mancanti.");
         }
         
         User user = server.getRegisteredUsers().get(req.username);
-        if (user == null || !user.getPassword().equals(req.psw)) {
+
+        if (user == null || !user.getPassword().equals(req.psw)){
             return JsonResponse.error(Constants.ERR_AUTH_FAILED, "Credenziali errate.");
         }
         
+        //Se supero tutto lo metto nella mappa delle socketchannel-user
         server.getActiveConnections().put(channel, user);
         
-        if (req.udpPort != null) {
-            try {
+        //Per notifiche asincrone
+        if(req.udpPort != null){    //La mando solo a login
+            try{
+
+                //Estraggo un ooggetto InetSocketAddress per ricavare l'IP per i messaggi UDP
                 InetSocketAddress remoteAddress = (InetSocketAddress) channel.getRemoteAddress();
+
+                //Punta all'IP dell'utente e alla porta udp data
                 InetSocketAddress udpAddress = new InetSocketAddress(remoteAddress.getAddress(), req.udpPort);
+
+                //Poi lo aggiungo alla mappa
                 server.getUserUdpAddresses().put(user.getUsername(), udpAddress);
-            } catch (Exception e) {
+
+            }catch(Exception e){
                 System.err.println("Errore IP client per UDP: " + e.getMessage());
             }
         }
 
+
         Game game = server.getGameManager().getCurrentGame();
         JsonObject data = new JsonObject();
+
+        //Data sarà il payload
         data.addProperty("message", "Login completato. Benvenuto " + user.getUsername());
         
-        if (game != null) {
+        if(game != null){
+
             data.addProperty("gameId", game.getGameId());
             data.addProperty("remainingTimeSeconds", game.getRemainingTimeSeconds());
+
             Gson gson = new Gson();
+
+            //Prendo l'elenco di parole, faccio un oggetto JsonArray e uso .getAsJsonArray per fare casting
             JsonArray wordsArray = gson.toJsonTree(game.getAllWords()).getAsJsonArray();
             data.add("words", wordsArray);
             
-            if (user.getCurrentGameId() == null || game.getGameId() != user.getCurrentGameId()) {
+            //Controllo che abbia un GameId e che sia della partita corrente, nel caso lo aggiorno
+            if(user.getCurrentGameId() == null || game.getGameId() != user.getCurrentGameId()){
                 user.resetGameState(game.getGameId());
             }
             
-            // Aggiungiamo campi extra per login (come da specifica: proposte corrette, num errori, punti)
+            //Altri dati
             data.add("correctProposals", gson.toJsonTree(user.getCurrentFoundGroups()));
             data.addProperty("mistakes", user.getCurrentMistakes());
             data.addProperty("score", user.getCurrentScore());
         }
+
         return JsonResponse.success(data);
     }
+
+
+//---------------------------------------------------------------------------------------
+
     
     private static JsonResponse handleLogout(SocketChannel channel, NioServer server) {
         User user = server.getActiveConnections().remove(channel);
@@ -121,6 +173,10 @@ public class CommandProcessor {
         }
         return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Utente non loggato.");
     }
+
+
+//---------------------------------------------------------------------------------------
+
     
     private static JsonResponse handleSubmitProposal(JsonRequest req, SocketChannel channel, NioServer server) {
         User user = server.getActiveConnections().get(channel);
@@ -188,6 +244,10 @@ public class CommandProcessor {
         }
     }
 
+
+//---------------------------------------------------------------------------------------
+
+
     private static JsonResponse handleUpdateCredentials(JsonRequest req, SocketChannel channel, NioServer server) {
         User user = server.getActiveConnections().get(channel);
         if (user == null) {
@@ -231,6 +291,10 @@ public class CommandProcessor {
         }
     }
 
+
+//---------------------------------------------------------------------------------------
+
+
     private static JsonResponse handleGameInfo(JsonRequest req, SocketChannel channel, NioServer server) {
         User user = server.getActiveConnections().get(channel);
         if (user == null) return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
@@ -273,6 +337,10 @@ public class CommandProcessor {
         }
     }
     
+
+//---------------------------------------------------------------------------------------
+
+
     private static JsonResponse handleGameStats(JsonRequest req, SocketChannel channel, NioServer server) {
         User user = server.getActiveConnections().get(channel);
         if (user == null) return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
@@ -312,6 +380,10 @@ public class CommandProcessor {
             return JsonResponse.success(data);
         }
     }
+
+
+//---------------------------------------------------------------------------------------
+
     
     private static JsonResponse handlePlayerStats(SocketChannel channel, NioServer server) {
         User user = server.getActiveConnections().get(channel);
@@ -333,6 +405,10 @@ public class CommandProcessor {
         
         return JsonResponse.success(data);
     }
+
+
+//---------------------------------------------------------------------------------------
+
     
     private static JsonResponse handleLeaderboard(JsonRequest req, SocketChannel channel, NioServer server) {
         User user = server.getActiveConnections().get(channel);
@@ -379,4 +455,6 @@ public class CommandProcessor {
             return JsonResponse.success(data);
         }
     }
+
+
 }
