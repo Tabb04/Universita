@@ -117,6 +117,14 @@ public class GameManager {
         
         System.out.println("[GAMEMANAGER] Nuova partita casuale iniziata: ID " + newGame.getGameId() + ". Durata: " + gameDurationSeconds + "s");
 
+        // Iscrizione automatica degli utenti attivi (loggati) alla nuova partita
+        // ed invio proattivo delle nuove parole e stato (come se avessero fatto login)
+        if (server != null) {
+            server.broadcastNewGameStart(newGame);
+        }
+
+
+
         // Pianifichiamo la fine della partita allo scadere del tempo
         scheduler.schedule(() -> {
             int endedGameId = currentGame.get().getGameId();

@@ -81,13 +81,14 @@ public class CommandProcessor{
         String name = req.name.trim();
 
         //Prendo la mappa degli utenti registrati
+        //Faccio questa parte esclusiva per evitare doppie registrazioni
         synchronized(server.getRegisteredUsers()){
             if(server.getRegisteredUsers().containsKey(name)){
                 return JsonResponse.error(Constants.ERR_ALREADY_REGISTERED, "Utente " + name + " esiste già.");
             }
 
             User newUser = new User(name, req.psw);
-            server.getRegisteredUsers().put(name, newUser); //È concurrent tanto
+            server.getRegisteredUsers().put(name, newUser);
         }
         return JsonResponse.success(new JsonObject());  //Payload vuoto
     }
@@ -98,13 +99,13 @@ public class CommandProcessor{
 
     private static JsonResponse handleLogin(JsonRequest req, SocketChannel channel, NioServer server){
 
-        if (req.username == null || req.psw == null){
+        if(req.username == null || req.psw == null){
             return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Username o password mancanti.");
         }
         
         User user = server.getRegisteredUsers().get(req.username);
 
-        if (user == null || !user.getPassword().equals(req.psw)){
+        if(user == null || !user.getPassword().equals(req.psw)){
             return JsonResponse.error(Constants.ERR_AUTH_FAILED, "Credenziali errate.");
         }
         
@@ -136,7 +137,7 @@ public class CommandProcessor{
         //Data sarà il payload
         data.addProperty("message", "Login completato. Benvenuto " + user.getUsername());
         
-        if(game != null){
+        if(game != null){   //Controllo per sicurezza
 
             data.addProperty("gameId", game.getGameId());
             data.addProperty("remainingTimeSeconds", game.getRemainingTimeSeconds());
@@ -165,11 +166,13 @@ public class CommandProcessor{
 //---------------------------------------------------------------------------------------
 
     
-    private static JsonResponse handleLogout(SocketChannel channel, NioServer server) {
+    private static JsonResponse handleLogout(SocketChannel channel, NioServer server){
+
+        //Devo rimuoverlo sia dalle connessioni TCP che UDP
         User user = server.getActiveConnections().remove(channel);
-        if (user != null) {
+        if(user != null){
             server.getUserUdpAddresses().remove(user.getUsername());
-            return JsonResponse.success(new JsonObject());
+            return JsonResponse.success(new JsonObject());  //Sempre payload vuoto
         }
         return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Utente non loggato.");
     }
@@ -178,103 +181,152 @@ public class CommandProcessor{
 //---------------------------------------------------------------------------------------
 
     
-    private static JsonResponse handleSubmitProposal(JsonRequest req, SocketChannel channel, NioServer server) {
+    private static JsonResponse handleSubmitProposal(JsonRequest req, SocketChannel channel, NioServer server){
+
+        //prendo lo user
         User user = server.getActiveConnections().get(channel);
-        if (user == null) return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Utente non loggato.");
-        
-        if (req.words == null || req.words.size() != 4) {
-            return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Devi inviare esattamente 4 parole.");
+
+        if(user == null){
+            return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Utente non loggato!");
         }
+        
+        if(req.words == null || req.words.size() != 4){    //Ricontrollo che siano 4 parole comunque
+            return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Devi inviare esattamente 4 parole!");
+        }
+
+        //Prendo la partita corrente 
         Game game = server.getGameManager().getCurrentGame();
-        if (game == null) {
+        
+        if(game == null){
             return JsonResponse.error(Constants.ERR_GAME_NOT_FOUND, "Nessuna partita globale in corso.");
         }
-        if (user.getCurrentGameId() == null || game.getGameId() != user.getCurrentGameId()) {
-            return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Tempo scaduto per questa partita! Aspetta la prossima.");
+
+
+
+        if(user.getCurrentGameId() == null || game.getGameId() != user.getCurrentGameId()){
+
+            //Prima non trasferivo utenti correttamente, lascio questo controllo comunque
+            user.resetGameState(game.getGameId());
+            return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Mismatch tra le partite, reset Id partita effettuato.");
         }
         
-        synchronized (user) {
-            if (user.isGameFinished()) {
-                return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Hai già terminato questa partita.");
-            }
+        
+        if(user.isGameFinished()){  //Ho già fatto troppi errori o già vinto
+            return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Hai già terminato questa partita.");
+        }
 
-            // Validazione malformata (parole duplicate, non nel gioco, già assegnate)
-            Set<String> uniqueWords = new HashSet<>(req.words);
-            if (uniqueWords.size() != 4) {
-                return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Proposta malformata: parole duplicate o numero errato.");
+
+        //Parole duplicate, non nel gioco o già assegnate
+        Set<String> uniqueWords = new HashSet<>(req.words); //Creo un hashset per filtrare i duplicati
+
+        if(uniqueWords.size() != 4){
+            return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Proposta malformata: parole duplicate o numero errato");
+        }
+
+
+        List<String> allWords = game.getAllWords();
+        for(String wd : req.words){
+
+            //Ciclando nelle parole inviate controllo se ce ne è almeno una che non appartiene alle parole della partita
+            if(!allWords.contains(wd)){
+                return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Proposta malformata: la parola " + wd + " non appartiene alla partita corente.");
             }
-            List<String> allWords = game.getAllWords();
-            for (String w : req.words) {
-                if (!allWords.contains(w)) {
-                    return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Proposta malformata: la parola " + w + " non appartiene alla partita corrente.");
-                }
-            }
-            for (String theme : user.getCurrentFoundGroups()) {
-                for (WordDataset.Group g : game.getData().groups) {
-                    if (g.theme.equals(theme)) {
-                        for (String w : req.words) {
-                            if (g.words.contains(w)) {
-                                return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Proposta malformata: la parola " + w + " è già stata raggruppata correttamente.");
-                            }
+        }
+
+
+        //Controllo che le parole inviate non appartengano a gruppi già indovinati
+        //Guardo tra i gruppi già trovati
+        for(String theme : user.getCurrentFoundGroups()){
+
+            //Per ogni tema guardo l'oggetto Group caricato dal database per sapere le parole del gruppo
+            for(WordDataset.Group g : game.getData().groups){
+
+                if(g.theme.equals(theme)){  //Se corrisponde
+
+                    //Guardo le 4 parole della proposta
+                    for(String w : req.words){
+
+                        //Se faceva parte del gruppo allora errore
+                        if(g.words.contains(w)){
+                            return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Proposta malformata: la parola " + w + " è già stata raggruppata");
                         }
                     }
                 }
             }
+        }
 
-            WordDataset.Group foundGroup = game.checkProposal(req.words);
-            JsonObject data = new JsonObject();
-            
-            if (foundGroup != null) {
-                if (user.getCurrentFoundGroups().contains(foundGroup.theme)) {
-                    return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Hai già indovinato questo gruppo.");
-                }
-                user.addFoundGroup(foundGroup.theme);
-                data.addProperty("result", "correct");
-                data.addProperty("theme", foundGroup.theme);
-            } else {
-                user.addMistake();
-                data.addProperty("result", "wrong");
-            }
-            
+        //Ora guardo se la proposta è corretta e ricavo il gruppo
+        WordDataset.Group foundGroup = game.checkProposal(req.words);
+        JsonObject data = new JsonObject();      //Payload
+        
+
+        //Se è corretta
+        if(foundGroup != null){
+
+            //Controllato già sopra che non sia un gruppo già indovinato
+
+            user.addFoundGroup(foundGroup.theme);
+            data.addProperty("result", "correct");
+            data.addProperty("theme", foundGroup.theme);
+        }else{
+
+            //Se risposta incorretta
+            user.addMistake();
+            data.addProperty("result", "wrong");
+        }
+
+            //gli invio i dati generali della partita in corso
             data.addProperty("mistakes", user.getCurrentMistakes());
             data.addProperty("score", user.getCurrentScore());
             data.addProperty("gameFinished", user.isGameFinished());
             
             return JsonResponse.success(data);
-        }
+
     }
 
 
 //---------------------------------------------------------------------------------------
 
+    //Aggiornare credenziali
+    //Se non voglio aggiornare uno dei due campi basta mettere un dash (-)
+    private static JsonResponse handleUpdateCredentials(JsonRequest req, SocketChannel channel, NioServer server){
 
-    private static JsonResponse handleUpdateCredentials(JsonRequest req, SocketChannel channel, NioServer server) {
-        User user = server.getActiveConnections().get(channel);
-        if (user == null) {
-            return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Devi essere loggato.");
+
+        //Nel pdf dice che l'utente deve essere in grado di dimostrare che conosce la password
+        //Quindi faccio che questa operazione è posssibile anche da sloggati
+        if(req.oldName == null || req.oldPsw == null){
+            return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Inseririsci le tue vecchie credenziali per aggiornarle.");
         }
-        if (req.oldName == null || req.oldPsw == null) {
-            return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Devi inserire le tue vecchie credenziali per aggiornarle.");
-        }
-        if (!user.getPassword().equals(req.oldPsw) || !user.getUsername().equals(req.oldName)) {
-            return JsonResponse.error(Constants.ERR_AUTH_FAILED, "Vecchie credenziali errate.");
+        
+        //Vado a controllare se corrisponde la password
+        User user = server.getRegisteredUsers().get(req.oldName);
+        if(user == null || !user.getPassword().equals(req.oldPsw)){
+            return JsonResponse.error(Constants.ERR_AUTH_FAILED, "Vecchie credenziali errate o utente inesistente.");
         }
         
         boolean changed = false;
         
-        // Cambio password
-        if (req.newPsw != null && !req.newPsw.isEmpty() && !req.newPsw.equals("-")) {
+
+        //Cambio password
+        //Controllo che sia arrivata una password non vuota e non un dash
+        if(req.newPsw != null && !req.newPsw.isEmpty() && !req.newPsw.equals("-")){ //usare equals non ""==""
             user.setPassword(req.newPsw);
             changed = true;
         }
         
-        // Cambio nome utente (più complesso perché è la chiave della mappa registeredUsers)
-        if (req.newName != null && !req.newName.isEmpty() && !req.newName.equals("-")) {
-            synchronized (server.getRegisteredUsers()) {
-                if (server.getRegisteredUsers().containsKey(req.newName)) {
+        //Cambio nome utente (più complesso perché è la chiave della mappa registeredUsers)
+        if(req.newName != null && !req.newName.isEmpty() && !req.newName.equals("-")){
+
+            //Il cambio di nome lo faccio in un blocco syncrhonized per evitare che qualcun'altro si registri con lo stesso
+            //nome nello stesso istante
+            synchronized(server.getRegisteredUsers()){
+
+                //Controllo che il nome utente non sia già preso da qualcuno
+                if(server.getRegisteredUsers().containsKey(req.newName)){
                     return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Il nuovo nome utente esiste già.");
                 }
-                // Rimozione vecchia chiave e inserimento nuova
+                
+                //Rimuovo vecchia chiave e inserisco la nuova
                 server.getRegisteredUsers().remove(user.getUsername());
                 user.setUsername(req.newName);
                 server.getRegisteredUsers().put(req.newName, user);
@@ -282,11 +334,12 @@ public class CommandProcessor{
             }
         }
         
-        if (changed) {
+
+        if(changed){
             JsonObject data = new JsonObject();
             data.addProperty("message", "Credenziali aggiornate con successo.");
             return JsonResponse.success(data);
-        } else {
+        }else{
             return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Nessun parametro da aggiornare.");
         }
     }
@@ -295,18 +348,31 @@ public class CommandProcessor{
 //---------------------------------------------------------------------------------------
 
 
-    private static JsonResponse handleGameInfo(JsonRequest req, SocketChannel channel, NioServer server) {
+    //
+    private static JsonResponse handleGameInfo(JsonRequest req, SocketChannel channel, NioServer server){
+        
         User user = server.getActiveConnections().get(channel);
-        if (user == null) return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
+        if(user == null){
+            return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
+        }
         
         Game game = server.getGameManager().getCurrentGame();
         Gson gson = new Gson();
-        JsonObject data = new JsonObject();
+        JsonObject data = new JsonObject(); //Sempre payload
         
-        boolean isCurrentGame = (req.gameId == null || req.gameId == -1 || (game != null && game.getGameId() == req.gameId));
-        
-        if (isCurrentGame && game != null) {
-            // Partita in corso
+        //Siccome posso richiedere anche informazioni su partite passate devo capire se
+        //sta chiedendo uno storico o quella corrente (se corrente non invia niente o magari un -1 o l'id corrente se è infame)
+        int targetId= (req.gameId == null || req.gameId == -1) ? game.getGameId() : req.gameId;
+
+
+        //Partita in corso
+        if(targetId == game.getGameId()){
+
+            //Sempre per problema di mismatch faccio un controllo sui gameId
+            if (user.getCurrentGameId() == null || game.getGameId() != user.getCurrentGameId()) {
+                user.resetGameState(game.getGameId());
+            }
+
             data.addProperty("gameId", game.getGameId());
             data.addProperty("remainingTimeSeconds", game.getRemainingTimeSeconds());
             data.add("words", gson.toJsonTree(game.getAllWords()).getAsJsonArray());
@@ -314,8 +380,62 @@ public class CommandProcessor{
             data.addProperty("mistakes", user.getCurrentMistakes());
             data.addProperty("score", user.getCurrentScore());
             return JsonResponse.success(data);
-        } else {
-            // Partita conclusa
+
+
+        //Partita conclusa
+        }else{
+            //Oggetto con le statistiche di una partita passata
+            GameManager.HistoricalGameStats stats = server.getGameManager().getHistoricalStats(targetId);
+
+            if(stats == null){
+                return JsonResponse.error(Constants.ERR_GAME_NOT_FOUND, "Partita " + targetId + " inesistente o non ancora finita");
+            }
+
+            //Dati generali della partita
+            data.addProperty("gameId", stats.gameId);
+            data.add("groups", gson.toJsonTree(stats.data.groups));
+
+
+            //Dati dell'utente specifico su quella partita
+            User.GameResult result = user.getHistory().get(targetId);   //Prendo lo storico dell'utente e poi la partita specifica
+            
+            if(result != null){
+                data.addProperty("myMistakes", result.mistakes);
+                data.addProperty("myScore", result.score);
+                data.addProperty("won", result.won);
+            }else{
+                data.addProperty("participated", false);
+            }
+            return JsonResponse.success(data);
+        }
+
+
+        /*
+        boolean isCurrentGame = (req.gameId == null || req.gameId == -1 || (game != null && game.getGameId() == req.gameId));
+        
+
+
+        if(isCurrentGame && (game != null)){
+
+            //Controllo anche qui nel caso mi fosse sfuggito un altro problema di mismatch tra gameId
+            if(user.getCurrentGameId() == null || game.getGameId() != user.getCurrentGameId()){
+                user.resetGameState(game.getGameId());
+            }
+
+
+
+            //Partita corrente
+            data.addProperty("gameId", game.getGameId());
+            data.addProperty("remainingTimeSeconds", game.getRemainingTimeSeconds());
+            data.add("words", gson.toJsonTree(game.getAllWords()).getAsJsonArray());    //Stessa formattazione del login
+            data.add("correctProposals", gson.toJsonTree(user.getCurrentFoundGroups()));
+            data.addProperty("mistakes", user.getCurrentMistakes());
+            data.addProperty("score", user.getCurrentScore());
+            return JsonResponse.success(data);
+
+        }else{
+
+            //Partita vecchia
             int queryGameId = (req.gameId != null && req.gameId != -1) ? req.gameId : (game != null ? game.getGameId() : -1);
             GameManager.HistoricalGameStats stats = server.getGameManager().getHistoricalStats(queryGameId);
             if (stats == null) {
@@ -335,6 +455,8 @@ public class CommandProcessor{
             }
             return JsonResponse.success(data);
         }
+
+*/
     }
     
 

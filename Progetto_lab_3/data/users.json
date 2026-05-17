@@ -213,10 +213,10 @@
   "Mattia": {
     "username": "Mattia",
     "password": "cazzo",
-    "gamesPlayed": 2,
+    "gamesPlayed": 11,
     "gamesWon": 0,
-    "globalScore": 0,
-    "puzzlesCompleted": 2,
+    "globalScore": 24,
+    "puzzlesCompleted": 11,
     "puzzlesWon": 0,
     "puzzlesLost": 0,
     "currentStreak": 0,
@@ -228,7 +228,7 @@
       0,
       0,
       0,
-      2
+      11
     ],
     "history": {
       "502": {
@@ -238,6 +238,51 @@
       },
       "853": {
         "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "264": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "783": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "301": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "354": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "12": {
+        "score": 6,
+        "mistakes": 0,
+        "won": false
+      },
+      "304": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "17": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "662": {
+        "score": 12,
+        "mistakes": 0,
+        "won": false
+      },
+      "608": {
+        "score": 6,
         "mistakes": 0,
         "won": false
       }

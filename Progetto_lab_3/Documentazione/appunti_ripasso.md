@@ -30,8 +30,25 @@
     D. JsonRequest request = gson.fromJson(message, JsonRequest.class); riga ~ 204
        Trasforma una stringa java in un oggetto per reflection
 
+    E. (Non ho ancora fatto quella parte)
+        Quando faccio il broadcast della nuova partita il messaggio di fine arrivava dopo quello di inizio nuova.
+        Per ovviare a questo problema ho dovuto inserire una sleep in quello della nuova partita. Il reset della 
+        partita comunque avviene prima di tutto (non serve a tanto ma potrebbe manadre una proposta in quel secondo?)
+        Potenziali soluzioni senza sleep: 1. Usare protocollo TCP per entrambi, così ho garanzia di ordine di consegna
+                                          2. Bufferizzare nel client per riordinare
+                                          3. Chiamare in GameManager.java la broadcast del fine partita e poi fare startNextGame(). Questo però non è una soluzione sicura perché essendo due protocolli diversi lo scheduler di rete non assicura l'ordine dei due messaggi
+
 6. CommandProcessor.java
     A. Primo if, sembra che i comandi non definiti sono controllati in server, ma anche in client mi sa
+
+    B. Utilizzo di fine-grained-locking (usare synchronized)
+
+    C. Per ogni operazione utilizzo il channel e guardo a che utente è associato
+
+7. JsonRequest.java
+    A. Ho fatto campi specifici che vengono utilizzati solo per alcuni tipi di richieste. Es. Non riutilizzo gli stessi campi del login anche per fare l'aggiornamento delle password
+
+    B. UpdateCredentials se non voglio aggiornare un campo basta mettere un dash
 
 
 APPUNTI PER RELAZIONE
@@ -43,4 +60,12 @@ APPUNTI PER RELAZIONE
 - Guardare come fare in modo che Vscode faccia gli import in automatico
 
 
-AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER -> COMMANDPROCESSOR
+AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER(funzione processmanage) -> COMMANDPROCESSOR
+
+
+Modifiche per correzione di autologin a prossima partita
+
+- [x] Aggiungere `broadcastNewGameStart` in `NioServer.java`
+- [x] Chiamare `broadcastNewGameStart` dal timer di `GameManager.java`
+- [x] Implementare auto-iscrizione "lazy" in `CommandProcessor.java`
+- [x] Ricompilare e verificare il progetto

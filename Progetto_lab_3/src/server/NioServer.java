@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -40,8 +41,9 @@ public class NioServer{
     private ServerSocketChannel serverChannel;
     private DatagramSocket udpSocket;
 
-    //Mappa globale per salvare gli utenti registrati
+    //Mappa globale per salvare gli utenti registrati, associato ad ognuno il nome utente
     private final ConcurrentHashMap<String, User> registeredUsers = new ConcurrentHashMap<>();
+
 
     //Mappa per associare un SocketChannel a un utente loggato
     private final ConcurrentHashMap<SocketChannel, User> activeConnections = new ConcurrentHashMap<>();
@@ -277,4 +279,57 @@ public class NioServer{
             }
         }
     }
+
+
+/**
+     * Invia un messaggio TCP a tutti i client loggati con le nuove parole e il nuovo stato,
+     * effettuando contestualmente l'iscrizione automatica, come richiesto dalle specifiche:
+     * "riceverà le nuove parole come se avesse effettuato il login durante la partita".
+     */
+    public void broadcastNewGameStart(server.Game newGame) {
+        // Effettuiamo subito l'auto-iscrizione in modo che lo stato interno sia coerente
+        for (Map.Entry<SocketChannel, User> entry : activeConnections.entrySet()) {
+            User user = entry.getValue();
+            user.resetGameState(newGame.getGameId());
+        }
+
+        // Lanciamo l'invio TCP in un thread separato con una piccola sleep
+        // in modo da garantire che il messaggio UDP "GAME_ENDED" venga processato e stampato prima dal client
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            JsonObject baseData = new JsonObject();
+            baseData.addProperty("event", "NEW_GAME_STARTED");
+            baseData.addProperty("message", "Nuova partita iniziata!");
+            baseData.addProperty("gameId", newGame.getGameId());
+            // Aggiorniamo il tempo rimanente che nel frattempo è diminuito di 1s
+            baseData.addProperty("remainingTimeSeconds", newGame.getRemainingTimeSeconds());
+            
+            JsonArray wordsArray = gson.toJsonTree(newGame.getAllWords()).getAsJsonArray();
+            baseData.add("words", wordsArray);
+            
+            for (Map.Entry<SocketChannel, User> entry : activeConnections.entrySet()) {
+                SocketChannel channel = entry.getKey();
+                User user = entry.getValue();
+                
+                // Creiamo un payload clonato per aggiungere lo stato specifico dell'utente
+                JsonObject userData = baseData.deepCopy();
+                userData.add("correctProposals", gson.toJsonTree(user.getCurrentFoundGroups()));
+                userData.addProperty("mistakes", user.getCurrentMistakes());
+                userData.addProperty("score", user.getCurrentScore());
+                
+                // Invio TCP
+                sendResponse(channel, JsonResponse.success(userData));
+            }
+        }).start();
+    }
+
+
+
+
+
 }

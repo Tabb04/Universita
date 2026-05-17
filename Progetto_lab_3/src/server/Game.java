@@ -48,13 +48,16 @@ public class Game{
         return data;
     }
     
-    public WordDataset.Group checkProposal(List<String> proposal)
-    {
-        if (proposal == null) return null;
-        for (WordDataset.Group g : data.groups){
+
+    //Chiamata quando si invia una proposta in CommandProcessor
+    //Verifica la corretteza di una proposta e restituisce il gruppo
+    public WordDataset.Group checkProposal(List<String> proposal){
+        
+        if(proposal == null) return null;
+        for(WordDataset.Group g : data.groups){
 
             //Uso un hashset perché non mi improta dell'ordine
-            if (new HashSet<>(g.words).equals(new HashSet<>(proposal))) {
+            if(new HashSet<>(g.words).equals(new HashSet<>(proposal))){
                 return g;
             }
         }
