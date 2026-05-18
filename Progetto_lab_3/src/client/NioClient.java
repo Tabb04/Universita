@@ -1,7 +1,12 @@
 package client;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import java.io.IOException;
+import java.util.List;
+import java.util.ArrayList;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
@@ -141,16 +146,18 @@ public class NioClient implements Runnable {
     private void readUdp(SelectionKey key) throws IOException {
         DatagramChannel channel = (DatagramChannel) key.channel();
         ByteBuffer buffer = (ByteBuffer) key.attachment();
-        
+
         buffer.clear();
-        channel.receive(buffer); 
+        channel.receive(buffer);
         buffer.flip();
-        
+
         byte[] data = new byte[buffer.remaining()];
         buffer.get(data);
         String msg = new String(data, StandardCharsets.UTF_8).trim();
-        
+
+        // Mostriamo esplicitamente che si tratta di un broadcast
         System.out.println("\n[BROADCAST UDP] -> " + msg);
+
         System.out.print("> ");
     }
 }

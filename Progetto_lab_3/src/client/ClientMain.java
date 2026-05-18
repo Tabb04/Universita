@@ -7,6 +7,10 @@ import client.NioClient;
 
 import java.util.Arrays;
 import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Punto di ingresso per il client di Connections.
@@ -54,7 +58,18 @@ public class ClientMain {
             String line = scanner.nextLine().trim();
             if (line.isEmpty()) continue;
             
-            String[] parts = line.split("\\s+");
+            List<String> list = new ArrayList<>();
+            Matcher m = Pattern.compile("([^\"\\s]+|\"([^\"]*)\")\\s*").matcher(line);
+            while (m.find()) {
+                if (m.group(2) != null) {
+                    list.add(m.group(2)); // Riconosce le stringhe racchiuse tra virgolette
+                } else {
+                    list.add(m.group(1)); // Riconosce le stringhe normali
+                }
+            }
+            String[] parts = list.toArray(new String[0]);
+            if (parts.length == 0) continue;
+            
             String cmd = parts[0];
             
             JsonRequest req = null;

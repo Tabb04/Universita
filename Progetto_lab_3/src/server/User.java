@@ -203,6 +203,11 @@ public class User{
 
     //getters per le statistiche e storico
     public Map<Integer, GameResult> getHistory(){
+
+        //Quando caricavo gli utenti e non avevano una history mi dava un null e davo eccezione
+        if(history == null){
+            history = new HashMap<>();
+        }
         return history;
     }
     

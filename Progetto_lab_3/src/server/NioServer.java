@@ -84,6 +84,7 @@ public class NioServer{
     //AVVIO SERVER NIO E ASCOLTO SULLA PORTA DATA
 
     public void start() throws IOException{
+
         selector = Selector.open();
 
 
@@ -124,12 +125,14 @@ public class NioServer{
                 //Casi trattati sotto
                 if(key.isAcceptable()){
                     acceptConnection(key);
+
                 }else if(key.isReadable()){
                     handleRead(key);   
                 }
             }
         }
     }
+
 
 
     //ACCETTA CONNESSIONE
@@ -151,6 +154,7 @@ public class NioServer{
 
         try{
             int bytesRead = clientChannel.read(buffer);
+
             if(bytesRead == -1){    //Ha mandato chiusura
 
                 //Client ha chiuso la connessione
@@ -158,14 +162,18 @@ public class NioServer{
                 return;
             }
 
+            //Preparo per lettura
             buffer.flip();
+
+            //Alloco array grande quanto ciò da leggere nel buffer
             byte[] data = new byte[buffer.remaining()];
             buffer.get(data);
+
+            //Converto in una stringa che rappresenta la richiesta JSON
             String message = new String(data, StandardCharsets.UTF_8).trim();   //Trim per gli whitespace, nell'assigment usava solo un parametro
             buffer.compact();
 
             if(!message.isEmpty()){
-
                 workerPool.submit(() -> processMessage(clientChannel, message));
             }
         }catch(IOException e){
@@ -174,11 +182,12 @@ public class NioServer{
     }
 
 
-    //Gestisco disconnessione dell'utente
+    //GESTISCO DISCONNESSIONE DELL'UTENTE
     private void handleDisconnection(SocketChannel clientChannel){
         try{
             //Per tcp il canale è la chiave, per udp è l'utente
             User u = activeConnections.remove(clientChannel);
+
             if(u != null){
                 userUdpAddresses.remove(u.getUsername());
                 System.out.println("[SERVER] Utente disconnesso: " + u.getUsername());
@@ -187,90 +196,147 @@ public class NioServer{
             }
 
             clientChannel.close();
+
         }catch(IOException e){
             e.printStackTrace();
         }
     }
 
-    /**
-     * Eseguito dal thread worker per calcolare la risposta corretta. ???
-     */
+
+
+//---------------------------------------------------------------------------------------
+
+
+    //ESEGUITO DAL THREAD WORKER PER CALCOLARE RISPOSTA
+    //Utilizza metodo statico di CommandProcessor
     private void processMessage(SocketChannel clientChannel, String message){
         try{
             
-            //Parso la richiesta, formattazione la controlo prima dell'invio nel client
+            //Oggetto JsonRequest con campi specifici per ogni "operation"
             JsonRequest request = gson.fromJson(message, JsonRequest.class);
 
-            // Smistamento logica al processore
+            //Smistamento logica al processore
             JsonResponse response = CommandProcessor.process(request, clientChannel, this);
 
-            // Invia il risultato indietro
+            //Invio risultato al client
             sendResponse(clientChannel, response);
 
-        } catch (Exception e) {
+        }catch(Exception e){
             e.printStackTrace();
-            JsonResponse err = JsonResponse.error(400, "Richiesta malformata o errore server.");
+
+            JsonResponse err = JsonResponse.error(400, "Errore server.");
             sendResponse(clientChannel, err);
         }
     }
 
-    /**
-     * Invia in modo sincrono la stringa JSON sul Socket TCP del client.
-     */
-    private void sendResponse(SocketChannel channel, JsonResponse response) {
-        try {
-            // Aggiungiamo un \n al termine per aiutare il client a delimitare i messaggi
+
+//---------------------------------------------------------------------------------------
+
+
+    //RISPOSTA SINCRONA IN JSON
+    private void sendResponse(SocketChannel channel, JsonResponse response){
+        try{
+
+            //Aggiungo un \n al termine per aiutare il client a delimitare i messaggi
             String jsonStr = gson.toJson(response) + "\n";
-            ByteBuffer buffer = ByteBuffer.wrap(jsonStr.getBytes(StandardCharsets.UTF_8));
-            while (buffer.hasRemaining()) {
+
+            //Converto la stringa in byte
+            byte[] responseBytes = jsonStr.getBytes(StandardCharsets.UTF_8);
+            //Uso wrap per creare un bytebuffer per la risposta
+            ByteBuffer buffer = ByteBuffer.wrap(responseBytes);
+
+            while(buffer.hasRemaining()) {
                 channel.write(buffer);
             }
-        } catch (IOException e) {
+
+        }catch(IOException e){
             handleDisconnection(channel);
         }
     }
 
-    /**
-     * Invia un pacchetto UDP a tutti i client loggati per avvisarli del termine
-     * della partita.
-     * Il payload include le statistiche della partita conclusa e la classifica
-     * globale,
-     * come richiesto dalla specifica (Sez. 2.2, pag. 6).
-     */
-    public void broadcastGameEnd(int gameId) {
+
+//---------------------------------------------------------------------------------------
+
+
+    //NOTIFICA ASINCRONA DEL FINE PARTITA + STATISTICHE ??
+
+    public void broadcastGameEnd(int gameId){
+
         JsonObject payload = new JsonObject();
         payload.addProperty("event", "GAME_ENDED");
         payload.addProperty("gameId", gameId);
 
-        // Statistiche della partita conclusa (equivalente a requestGameStats per
-        // partita finita)
+        //Statistiche della partita conclusa + soluzione
+        //Cerco la partita dall'id
         GameManager.HistoricalGameStats stats = gameManager.getHistoricalStats(gameId);
-        if (stats != null) {
+        if(stats != null){
             payload.addProperty("totalParticipants", stats.totalParticipants);
             payload.addProperty("finishedParticipants", stats.finishedParticipants);
             payload.addProperty("wonParticipants", stats.wonParticipants);
             payload.addProperty("averageScore", stats.averageScore);
+            
+            //Soluzione
+            payload.add("groups", gson.toJsonTree(stats.data.groups));
         }
 
-        // Classifica globale ordinata per punteggio (equivalente a requestLeaderboard)
-        List<User> userList = new ArrayList<>(registeredUsers.values());
-        userList.sort((u1, u2) -> Integer.compare(u2.getGlobalScore(), u1.getGlobalScore()));
-        JsonArray leaderArray = new JsonArray();
-        for (int i = 0; i < userList.size(); i++) {
-            User u = userList.get(i);
+
+        //Leaderboard del match attuale
+        List<User> matchParticipants = new ArrayList<>();
+        for(User u : registeredUsers.values()){
+            //Aggiungo alla lista gli utenti che hanno partecipato a questa partita
+            //(sono sicuro che la history è già aggiornata visto che startNextGame e
+            //resetGameStats vengono chiamata prima di broadcastGameEnd)
+
+            if(u.getHistory().get(gameId) != null){
+                matchParticipants.add(u);
+            }
+        }
+        
+        //Ordina in base al punteggio ottenuto in questa partita (non leaderboard totale)
+        matchParticipants.sort((u1, u2) -> Integer.compare(u2.getHistory().get(gameId).score, u1.getHistory().get(gameId).score));
+        
+
+        JsonArray matchLeaderArray = new JsonArray();
+        //Come per la leaderbaord scorro in ordine decrescente e aggiungo le statistiche
+        for(int i = 0; i < matchParticipants.size(); i++){
+
+            User u = matchParticipants.get(i);
             JsonObject entry = new JsonObject();
             entry.addProperty("rank", i + 1);
             entry.addProperty("username", u.getUsername());
-            entry.addProperty("globalScore", u.getGlobalScore());
-            leaderArray.add(entry);
+            entry.addProperty("score", u.getHistory().get(gameId).score);
+            matchLeaderArray.add(entry);
         }
-        payload.add("leaderboard", leaderArray);
 
-        String message = gson.toJson(payload);
-        byte[] buffer = message.getBytes(StandardCharsets.UTF_8);
+        payload.add("matchLeaderboard", matchLeaderArray);
 
-        // Cicliamo tra tutti gli utenti noti attivi
-        for (InetSocketAddress address : userUdpAddresses.values()) {
+
+
+
+
+        
+        // Cicliamo tra tutti gli utenti noti attivi e personalizziamo il payload
+        for(Map.Entry<String, InetSocketAddress> entry : userUdpAddresses.entrySet()){
+            String username = entry.getKey();
+            InetSocketAddress address = entry.getValue();
+            User user = registeredUsers.get(username);
+            
+            JsonObject userPayload = payload.deepCopy();
+            
+            if (user != null) {
+                User.GameResult result = user.getHistory().get(gameId);
+                if (result != null) {
+                    userPayload.addProperty("participated", true);
+                    userPayload.addProperty("myMistakes", result.mistakes);
+                    userPayload.addProperty("myScore", result.score);
+                    userPayload.addProperty("won", result.won);
+                } else {
+                    userPayload.addProperty("participated", false);
+                }
+            }
+            
+            byte[] buffer = gson.toJson(userPayload).getBytes(StandardCharsets.UTF_8);
+            
             try {
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address);
                 udpSocket.send(packet);
@@ -279,6 +345,9 @@ public class NioServer{
             }
         }
     }
+
+
+//---------------------------------------------------------------------------------------
 
 
 /**

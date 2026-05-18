@@ -69,7 +69,7 @@ APPUNTI PER RELAZIONE
 - Cosa cambierebbe nell'implementazione se gli utenti fossero caricati a richiesta invece che subito tutti in memoria? Dovrei cambiare tutte le funzioni?
 - Correggere import soprattutto per le altre cartelle
 
-AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER(funzione processmanage) -> COMMANDPROCESSOR
+AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER
 
 
 Modifiche per correzione di autologin a prossima partita

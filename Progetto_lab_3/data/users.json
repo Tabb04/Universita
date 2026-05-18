@@ -18,7 +18,8 @@
       0,
       0,
       0
-    ]
+    ],
+    "history": {}
   },
   "Luca": {
     "username": "Luca",
@@ -39,7 +40,8 @@
       0,
       0,
       0
-    ]
+    ],
+    "history": {}
   },
   "Mirko": {
     "username": "Mirko",
@@ -60,7 +62,8 @@
       0,
       0,
       0
-    ]
+    ],
+    "history": {}
   },
   "Francesco": {
     "username": "Francesco",
@@ -147,7 +150,8 @@
       0,
       0,
       0
-    ]
+    ],
+    "history": {}
   },
   "luigi": {
     "username": "luigi",
@@ -241,12 +245,12 @@
   "Mattia": {
     "username": "Mattia",
     "password": "cazzo",
-    "gamesPlayed": 13,
+    "gamesPlayed": 17,
     "gamesWon": 0,
-    "globalScore": 50,
-    "puzzlesCompleted": 13,
+    "globalScore": 42,
+    "puzzlesCompleted": 17,
     "puzzlesWon": 0,
-    "puzzlesLost": 0,
+    "puzzlesLost": 1,
     "currentStreak": 0,
     "maxStreak": 0,
     "perfectPuzzles": 0,
@@ -255,8 +259,8 @@
       0,
       0,
       0,
-      0,
-      13
+      1,
+      16
     ],
     "history": {
       "502": {
@@ -322,6 +326,26 @@
       "312": {
         "score": 14,
         "mistakes": 1,
+        "won": false
+      },
+      "852": {
+        "score": -4,
+        "mistakes": 4,
+        "won": false
+      },
+      "481": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "533": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      },
+      "614": {
+        "score": 0,
+        "mistakes": 0,
         "won": false
       }
     }

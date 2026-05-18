@@ -1055,6 +1055,54 @@
     "wonParticipants": 0,
     "averageScore": 0.0
   },
+  "533": {
+    "gameId": 533,
+    "data": {
+      "gameId": 533,
+      "groups": [
+        {
+          "theme": "GOOD THINGS TO GET AT WORK",
+          "words": [
+            "BONUS",
+            "PROMOTION",
+            "RAISE",
+            "EQUITY"
+          ]
+        },
+        {
+          "theme": "DISREGARD",
+          "words": [
+            "OVERLOOK",
+            "DISCOUNT",
+            "FORGET",
+            "IGNORE"
+          ]
+        },
+        {
+          "theme": "KINDS OF CRACKERS",
+          "words": [
+            "CLUB",
+            "RITZ",
+            "ANIMAL",
+            "GOLDFISH"
+          ]
+        },
+        {
+          "theme": "FEATURED IN “ELOISE”",
+          "words": [
+            "PLAZA",
+            "TURTLE",
+            "PUG",
+            "ELOISE"
+          ]
+        }
+      ]
+    },
+    "totalParticipants": 1,
+    "finishedParticipants": 0,
+    "wonParticipants": 0,
+    "averageScore": -4.0
+  },
   "278": {
     "gameId": 278,
     "data": {
@@ -3167,6 +3215,54 @@
     "wonParticipants": 0,
     "averageScore": 0.0
   },
+  "852": {
+    "gameId": 852,
+    "data": {
+      "gameId": 852,
+      "groups": [
+        {
+          "theme": "METAPHORS FOR POTENTIALLY VOLATILE SITUATIONS",
+          "words": [
+            "PANDORA’S BOX",
+            "HORNET’S NEST",
+            "MINEFIELD",
+            "CAN OF WORMS"
+          ]
+        },
+        {
+          "theme": "BAR EVENTS",
+          "words": [
+            "LIVE MUSIC",
+            "HAPPY HOUR",
+            "KARAOKE",
+            "TRIVIA NIGHT"
+          ]
+        },
+        {
+          "theme": "WORDS AFTER A WELCOME DEPARTURE",
+          "words": [
+            "GOOD RIDDANCE",
+            "SAYONARA",
+            "FINALLY",
+            "ABOUT TIME"
+          ]
+        },
+        {
+          "theme": "\"ENDING WITH SYNONYMS FOR \"\"SWINDLE\"\"\"",
+          "words": [
+            "LUCKY STIFF",
+            "GOLDEN FLEECE",
+            "COMIC CON",
+            "AMERICAN HUSTLE"
+          ]
+        }
+      ]
+    },
+    "totalParticipants": 1,
+    "finishedParticipants": 1,
+    "wonParticipants": 0,
+    "averageScore": -4.0
+  },
   "853": {
     "gameId": 853,
     "data": {
@@ -4027,6 +4123,54 @@
       ]
     },
     "totalParticipants": 0,
+    "finishedParticipants": 0,
+    "wonParticipants": 0,
+    "averageScore": 0.0
+  },
+  "614": {
+    "gameId": 614,
+    "data": {
+      "gameId": 614,
+      "groups": [
+        {
+          "theme": "GLIMMER",
+          "words": [
+            "SUGGESTION",
+            "TOUCH",
+            "HINT",
+            "TRACE"
+          ]
+        },
+        {
+          "theme": "CORRESPOND WELL WITH",
+          "words": [
+            "MATCH",
+            "COMPLEMENT",
+            "SUIT",
+            "FIT"
+          ]
+        },
+        {
+          "theme": "FAMOUS PUPPETS",
+          "words": [
+            "PUNCH",
+            "TRIUMPH",
+            "OSCAR",
+            "LAMB CHOP"
+          ]
+        },
+        {
+          "theme": "DOG BREEDS MINUS “ER” SOUND",
+          "words": [
+            "POINT",
+            "BOX",
+            "SET",
+            "RETRIEVE"
+          ]
+        }
+      ]
+    },
+    "totalParticipants": 1,
     "finishedParticipants": 0,
     "wonParticipants": 0,
     "averageScore": 0.0
@@ -7243,6 +7387,54 @@
       ]
     },
     "totalParticipants": 0,
+    "finishedParticipants": 0,
+    "wonParticipants": 0,
+    "averageScore": 0.0
+  },
+  "481": {
+    "gameId": 481,
+    "data": {
+      "gameId": 481,
+      "groups": [
+        {
+          "theme": "STEAK CUTS",
+          "words": [
+            "HANGER",
+            "T-BONE",
+            "SKIRT",
+            "FILET"
+          ]
+        },
+        {
+          "theme": "KINDS OF UNDERWEAR",
+          "words": [
+            "BIKINI",
+            "G-STRING",
+            "HIPSTER",
+            "THONG"
+          ]
+        },
+        {
+          "theme": "INVOLVED IN A DENTIST VISIT",
+          "words": [
+            "X-RAY",
+            "TOOTHBRUSH",
+            "DRILL",
+            "SINK"
+          ]
+        },
+        {
+          "theme": "BRANDS THAT HAVE BECOME GENERIC TERMS",
+          "words": [
+            "JACUZZI",
+            "Q-TIP",
+            "CHAPSTICK",
+            "XEROX"
+          ]
+        }
+      ]
+    },
+    "totalParticipants": 1,
     "finishedParticipants": 0,
     "wonParticipants": 0,
     "averageScore": 0.0
