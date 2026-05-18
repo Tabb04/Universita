@@ -210,13 +210,13 @@
       }
     }
   },
-  "Mattia": {
-    "username": "Mattia",
-    "password": "cazzo",
-    "gamesPlayed": 11,
+  "Mattia1": {
+    "username": "Mattia1",
+    "password": "cazzo1",
+    "gamesPlayed": 1,
     "gamesWon": 0,
-    "globalScore": 24,
-    "puzzlesCompleted": 11,
+    "globalScore": 18,
+    "puzzlesCompleted": 1,
     "puzzlesWon": 0,
     "puzzlesLost": 0,
     "currentStreak": 0,
@@ -228,7 +228,35 @@
       0,
       0,
       0,
-      11
+      1
+    ],
+    "history": {
+      "312": {
+        "score": 18,
+        "mistakes": 0,
+        "won": false
+      }
+    }
+  },
+  "Mattia": {
+    "username": "Mattia",
+    "password": "cazzo",
+    "gamesPlayed": 13,
+    "gamesWon": 0,
+    "globalScore": 50,
+    "puzzlesCompleted": 13,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      13
     ],
     "history": {
       "502": {
@@ -284,6 +312,16 @@
       "608": {
         "score": 6,
         "mistakes": 0,
+        "won": false
+      },
+      "511": {
+        "score": 12,
+        "mistakes": 0,
+        "won": false
+      },
+      "312": {
+        "score": 14,
+        "mistakes": 1,
         "won": false
       }
     }

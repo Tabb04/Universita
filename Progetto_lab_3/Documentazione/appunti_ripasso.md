@@ -45,6 +45,12 @@
 
     C. Per ogni operazione utilizzo il channel e guardo a che utente è associato
 
+    D. Oggetto "Data" usato sempre per il payload (non sempre usato)
+
+    E. RequestPlayerStats si può fare solo per se stessi mentre leaderboard posso richiedere anche specificatamente un altro
+       utente con un po' meno dettagli
+
+
 7. JsonRequest.java
     A. Ho fatto campi specifici che vengono utilizzati solo per alcuni tipi di richieste. Es. Non riutilizzo gli stessi campi del login anche per fare l'aggiornamento delle password
 
@@ -58,7 +64,10 @@ APPUNTI PER RELAZIONE
 - La porta UDP la faccio mandare a login
 - Se vuoi sostituisci "common" come nome della cartella
 - Guardare come fare in modo che Vscode faccia gli import in automatico
-
+- Ho locckato tante operazioni dietro a login come richiesto da specifica
+- Riguardare bene come stampare un oggetto json
+- Cosa cambierebbe nell'implementazione se gli utenti fossero caricati a richiesta invece che subito tutti in memoria? Dovrei cambiare tutte le funzioni?
+- Correggere import soprattutto per le altre cartelle
 
 AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER(funzione processmanage) -> COMMANDPROCESSOR
 

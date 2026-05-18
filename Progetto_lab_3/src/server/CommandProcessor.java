@@ -17,10 +17,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 
-/**
- * Elabora i comandi inviati dal client in base al campo 'operation'.
- * Ogni metodo implementa le regole e produce un JsonResponse coerente.???
- */
+
+//ELABORA I COMANDI INVIATI DAL CLIENT SMISTANDO IN BASE AL CAMPO OPERATION
+//VIENE PRODOTTA UNA JSONRESPONSE
 
 public class CommandProcessor{
 
@@ -30,7 +29,6 @@ public class CommandProcessor{
         if(req == null || req.operation == null){
             return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Operazione non specificata.");
         }
-
 
         switch(req.operation){
 
@@ -68,9 +66,11 @@ public class CommandProcessor{
 
 
 
-    //TUTTI GLI HANDLE
+    //TUTTI GLI HANDLE:
+//---------------------------------------------------------------------------------------
 
 
+    //REGISTRAZIONE
     private static JsonResponse handleRegister(JsonRequest req, NioServer server){
 
         if(req.name == null || req.psw == null || req.name.trim().isEmpty()){
@@ -96,7 +96,7 @@ public class CommandProcessor{
 
 //---------------------------------------------------------------------------------------
 
-
+    //LOGIN
     private static JsonResponse handleLogin(JsonRequest req, SocketChannel channel, NioServer server){
 
         if(req.username == null || req.psw == null){
@@ -165,7 +165,7 @@ public class CommandProcessor{
 
 //---------------------------------------------------------------------------------------
 
-    
+    //LOGOUT
     private static JsonResponse handleLogout(SocketChannel channel, NioServer server){
 
         //Devo rimuoverlo sia dalle connessioni TCP che UDP
@@ -180,12 +180,11 @@ public class CommandProcessor{
 
 //---------------------------------------------------------------------------------------
 
-    
+    //CONTROLLO TENTATIVI
     private static JsonResponse handleSubmitProposal(JsonRequest req, SocketChannel channel, NioServer server){
 
         //prendo lo user
         User user = server.getActiveConnections().get(channel);
-
         if(user == null){
             return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Utente non loggato!");
         }
@@ -348,7 +347,7 @@ public class CommandProcessor{
 //---------------------------------------------------------------------------------------
 
 
-    //
+    //DATI DI GIOCO E PROGRESSO INDIVIDUALE
     private static JsonResponse handleGameInfo(JsonRequest req, SocketChannel channel, NioServer server){
         
         User user = server.getActiveConnections().get(channel);
@@ -408,92 +407,74 @@ public class CommandProcessor{
             }
             return JsonResponse.success(data);
         }
-
-
-        /*
-        boolean isCurrentGame = (req.gameId == null || req.gameId == -1 || (game != null && game.getGameId() == req.gameId));
-        
-
-
-        if(isCurrentGame && (game != null)){
-
-            //Controllo anche qui nel caso mi fosse sfuggito un altro problema di mismatch tra gameId
-            if(user.getCurrentGameId() == null || game.getGameId() != user.getCurrentGameId()){
-                user.resetGameState(game.getGameId());
-            }
-
-
-
-            //Partita corrente
-            data.addProperty("gameId", game.getGameId());
-            data.addProperty("remainingTimeSeconds", game.getRemainingTimeSeconds());
-            data.add("words", gson.toJsonTree(game.getAllWords()).getAsJsonArray());    //Stessa formattazione del login
-            data.add("correctProposals", gson.toJsonTree(user.getCurrentFoundGroups()));
-            data.addProperty("mistakes", user.getCurrentMistakes());
-            data.addProperty("score", user.getCurrentScore());
-            return JsonResponse.success(data);
-
-        }else{
-
-            //Partita vecchia
-            int queryGameId = (req.gameId != null && req.gameId != -1) ? req.gameId : (game != null ? game.getGameId() : -1);
-            GameManager.HistoricalGameStats stats = server.getGameManager().getHistoricalStats(queryGameId);
-            if (stats == null) {
-                return JsonResponse.error(Constants.ERR_GAME_NOT_FOUND, "Partita " + queryGameId + " inesistente o non ancora conclusa.");
-            }
-            data.addProperty("gameId", stats.gameId);
-            data.add("groups", gson.toJsonTree(stats.data.groups));
-            
-            // Dati utente specifici per quella partita
-            User.GameResult result = user.getHistory().get(queryGameId);
-            if (result != null) {
-                data.addProperty("myMistakes", result.mistakes);
-                data.addProperty("myScore", result.score);
-                data.addProperty("won", result.won);
-            } else {
-                data.addProperty("participated", false);
-            }
-            return JsonResponse.success(data);
-        }
-
-*/
     }
     
 
 //---------------------------------------------------------------------------------------
 
 
-    private static JsonResponse handleGameStats(JsonRequest req, SocketChannel channel, NioServer server) {
+    //STATISTICHE GLOBALI SUI GIOCATORI DI QUELLA PARTITA
+    private static JsonResponse handleGameStats(JsonRequest req, SocketChannel channel, NioServer server){
+
         User user = server.getActiveConnections().get(channel);
-        if (user == null) return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
-        
+        if(user == null){
+            return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
+        }
+
         Game game = server.getGameManager().getCurrentGame();
         JsonObject data = new JsonObject();
-        boolean isCurrentGame = (req.gameId == null || req.gameId == -1 || (game != null && game.getGameId() == req.gameId));
-        
-        if (isCurrentGame && game != null) {
-            // Partita in corso: tempo rimanente, numero di giocatori totali, quanti hanno concluso e quanti vinto.
-            int playing = 0, finished = 0, won = 0;
-            for (User u : server.getRegisteredUsers().values()) {
-                if (u.getCurrentGameId() != null && u.getCurrentGameId() == game.getGameId()) {
-                    if (!u.isGameFinished()) playing++;
-                    if (u.isGameFinished()) finished++;
-                    if (u.getCurrentFoundGroups() != null && u.getCurrentFoundGroups().size() >= 3) won++;
+
+        //Stesso calcolo come in handleGameInfo
+        int targetId = (req.gameId == null || req.gameId == -1) ? game.getGameId() : req.gameId;
+
+        //Partita corrente
+        if(targetId == game.getGameId()){
+
+            //Voglio sapere tempo rimanente, numero di giocatori totali, quanti hanno concluso e quanti vinto
+            int playing = 0;
+            int finished = 0;
+            int won = 0;
+
+            //Ciclo su tutti gli utenti REGISTRATI
+            //Potrei ciclare sulle connessioni attive ma un utente potrebbe aver giocato ed essersi
+            //disconnesso prima della richiesta di statistiche
+            for(User u : server.getRegisteredUsers().values()){
+
+                //Guardo se il GameId corrisponde e lo sommo alle statistiche
+                if(u.getCurrentGameId() != null && u.getCurrentGameId() == game.getGameId()){
+                    if(!u.isGameFinished()){
+                        playing++;
+                    }
+
+                    if(u.isGameFinished()){
+                        finished++;
+                    }
+
+                    if (u.getCurrentFoundGroups() != null && u.getCurrentFoundGroups().size() >= 3){
+                        won++;
+                    }
                 }
             }
+
+            //Statistiche sul gioco
             data.addProperty("gameId", game.getGameId());
             data.addProperty("remainingTimeSeconds", game.getRemainingTimeSeconds());
             data.addProperty("playersPlaying", playing);
             data.addProperty("playersFinished", finished);
             data.addProperty("playersWon", won);
             return JsonResponse.success(data);
-        } else {
-            // Partita conclusa
-            int queryGameId = (req.gameId != null && req.gameId != -1) ? req.gameId : (game != null ? game.getGameId() : -1);
-            GameManager.HistoricalGameStats stats = server.getGameManager().getHistoricalStats(queryGameId);
-            if (stats == null) {
-                return JsonResponse.error(Constants.ERR_GAME_NOT_FOUND, "Statistiche della partita " + queryGameId + " non disponibili.");
+
+        // Partita conclusa    
+        }else{
+
+            //Uguale a info
+            GameManager.HistoricalGameStats stats = server.getGameManager().getHistoricalStats(targetId);
+            
+            if(stats == null){
+                return JsonResponse.error(Constants.ERR_GAME_NOT_FOUND, "Statistiche della partita " + targetId + " non disponibili.");
             }
+
+            //Dati
             data.addProperty("gameId", stats.gameId);
             data.addProperty("totalParticipants", stats.totalParticipants);
             data.addProperty("finishedParticipants", stats.finishedParticipants);
@@ -506,16 +487,22 @@ public class CommandProcessor{
 
 //---------------------------------------------------------------------------------------
 
-    
-    private static JsonResponse handlePlayerStats(SocketChannel channel, NioServer server) {
+    //FORNISCE STATISTICHE SULL'UTENTE CHE FA RICHIESTA
+    private static JsonResponse handlePlayerStats(SocketChannel channel, NioServer server){
+
         User user = server.getActiveConnections().get(channel);
-        if (user == null) return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
-        
+        if(user == null){
+            return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
+        }
+
         JsonObject data = new JsonObject();
         data.addProperty("username", user.getUsername());
         data.addProperty("puzzlesCompleted", user.getPuzzlesCompleted());
+
+        //Per il win e lossrate devo avere almeno una partita completata
         double winRate = user.getPuzzlesCompleted() > 0 ? (double) user.getPuzzlesWon() / user.getPuzzlesCompleted() * 100 : 0;
         double lossRate = user.getPuzzlesCompleted() > 0 ? (double) user.getPuzzlesLost() / user.getPuzzlesCompleted() * 100 : 0;
+        
         data.addProperty("winRate", String.format("%.2f%%", winRate));
         data.addProperty("lossRate", String.format("%.2f%%", lossRate));
         data.addProperty("currentStreak", user.getCurrentStreak());
@@ -523,6 +510,8 @@ public class CommandProcessor{
         data.addProperty("perfectPuzzles", user.getPerfectPuzzles());
         
         Gson gson = new Gson();
+
+        //Vettore con le statistiche
         data.add("mistakeHistogram", gson.toJsonTree(user.getMistakeHistogram()));
         
         return JsonResponse.success(data);
@@ -531,48 +520,76 @@ public class CommandProcessor{
 
 //---------------------------------------------------------------------------------------
 
-    
-    private static JsonResponse handleLeaderboard(JsonRequest req, SocketChannel channel, NioServer server) {
+    //LEADERBOARD DI TUTTI GLI UTENTI (non nel dettaglio come playerstats)
+    //POSIZIONE DI UN UTENTE SPECIFICO NELLA LEADERBOARD
+    //TOP K UTENTI NELLA LEADERBOARD
+    private static JsonResponse handleLeaderboard(JsonRequest req, SocketChannel channel, NioServer server){
+
         User user = server.getActiveConnections().get(channel);
-        if (user == null) return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
-        
-        // Ordina utenti in base al punteggio globale storico
+        if (user == null){
+            return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Non loggato.");
+        }
+
+
+        //Ordino utenti in base al punteggio storico:
+        //Creo una lista con tutti gli user
         List<User> userList = new ArrayList<>(server.getRegisteredUsers().values());
-        userList.sort((u1, u2) -> Integer.compare(u2.getGlobalScore(), u1.getGlobalScore())); 
-        
+        //Ordino per globalscore
+        userList.sort((u1, u2) -> Integer.compare(u2.getGlobalScore(), u1.getGlobalScore()));         
+
+
         JsonObject data = new JsonObject();
-        
-        if (req.playerName != null && !req.playerName.isEmpty()) {
-            // Ricerca posizione giocatore specifico
+
+        //Ha richiesto un utente specifico
+        if(req.playerName != null && !req.playerName.isEmpty()){
+
             int rank = -1;
             int score = 0;
-            for (int i = 0; i < userList.size(); i++) {
-                if (userList.get(i).getUsername().equals(req.playerName)) {
+
+            //Scorro nella lista degli utenti
+            for(int i = 0; i < userList.size(); i++){
+
+                //Se lo trovo stampo il rank e globalscore
+                if(userList.get(i).getUsername().equals(req.playerName)){
                     rank = i + 1;
                     score = userList.get(i).getGlobalScore();
                     break;
                 }
             }
-            if (rank != -1) {
+
+            //Se è stato trovato
+            if(rank != -1){
+
                 data.addProperty("playerName", req.playerName);
                 data.addProperty("rank", rank);
                 data.addProperty("score", score);
                 return JsonResponse.success(data);
-            } else {
+
+            }else{
                 return JsonResponse.error(Constants.ERR_USER_NOT_FOUND, "Giocatore non trovato.");
             }
-        } else {
-            // Ritorna i top K
-            int limit = (req.topPlayers != null && req.topPlayers > 0) ? req.topPlayers : userList.size(); 
+
+        //Non ha specificato un utente quindi stampo o tutta leaderboard o top k
+        }else{
+
+            //Guardo se il campo di quanti k utenti voglio vedere è settato
+            int k = (req.topPlayers != null && req.topPlayers > 0) ? req.topPlayers : userList.size();
+
             JsonArray leaderArray = new JsonArray();
-            for (int i = 0; i < Math.min(limit, userList.size()); i++) {
+
+            //Fino alla fine (forza juve) o fino a k
+            for(int i = 0; i < Math.min(k, userList.size()); i++){
+
                 User u = userList.get(i);
+
+                //Oggetto che metto nel payload
                 JsonObject entry = new JsonObject();
                 entry.addProperty("rank", i + 1);
                 entry.addProperty("username", u.getUsername());
                 entry.addProperty("globalScore", u.getGlobalScore());
                 leaderArray.add(entry);
             }
+
             data.add("topPlayers", leaderArray);
             return JsonResponse.success(data);
         }

@@ -2207,6 +2207,54 @@
     "wonParticipants": 0,
     "averageScore": 0.0
   },
+  "312": {
+    "gameId": 312,
+    "data": {
+      "gameId": 312,
+      "groups": [
+        {
+          "theme": "ATTACH WITH ADHESIVE",
+          "words": [
+            "GLUE",
+            "STICK",
+            "PASTE",
+            "ADHERE"
+          ]
+        },
+        {
+          "theme": "PUBLISHED LINES",
+          "words": [
+            "WORDS",
+            "COPY",
+            "TEXT",
+            "WRITING"
+          ]
+        },
+        {
+          "theme": "DIAMOND QUALITIES",
+          "words": [
+            "CUT",
+            "COLOR",
+            "CLARITY",
+            "CARAT"
+          ]
+        },
+        {
+          "theme": "A-___",
+          "words": [
+            "ROD",
+            "PLUS",
+            "LIST",
+            "OK"
+          ]
+        }
+      ]
+    },
+    "totalParticipants": 2,
+    "finishedParticipants": 2,
+    "wonParticipants": 2,
+    "averageScore": 16.0
+  },
   "57": {
     "gameId": 57,
     "data": {
@@ -7678,5 +7726,53 @@
     "finishedParticipants": 0,
     "wonParticipants": 0,
     "averageScore": 0.0
+  },
+  "511": {
+    "gameId": 511,
+    "data": {
+      "gameId": 511,
+      "groups": [
+        {
+          "theme": "EQUIP",
+          "words": [
+            "OUTFIT",
+            "STOCK",
+            "PROVISION",
+            "FURNISH"
+          ]
+        },
+        {
+          "theme": "INDIVIDUALITY",
+          "words": [
+            "EGO",
+            "CHARACTER",
+            "BEING",
+            "SELF"
+          ]
+        },
+        {
+          "theme": "FURNITURE",
+          "words": [
+            "VANITY",
+            "WARDROBE",
+            "CONSOLE",
+            "CHEST"
+          ]
+        },
+        {
+          "theme": "WORDS WITH APOSTROPHES REMOVED",
+          "words": [
+            "SHELL",
+            "ID",
+            "CANT",
+            "WERE"
+          ]
+        }
+      ]
+    },
+    "totalParticipants": 1,
+    "finishedParticipants": 0,
+    "wonParticipants": 0,
+    "averageScore": 12.0
   }
 }

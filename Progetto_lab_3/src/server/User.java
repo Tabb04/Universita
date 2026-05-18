@@ -93,8 +93,12 @@ public class User{
         if((this.currentGameId != null) && (this.currentGameId != -1)){
             this.gamesPlayed++;
             this.globalScore += this.currentScore;
-            boolean won = (this.currentFoundGroups != null) && (this.currentFoundGroups.size() == 4);
+
+            //Corretto, devo controllare che siano 3 visto che con 3 proposte corrette mi fermo e do vittoria
+            //(ultima è per esclusione)
+            boolean won = this.currentFoundGroups != null && this.currentFoundGroups.size() == 3;
             
+
             //Salvo nello storico delle partite per l'istogramma
             this.history.put(this.currentGameId, new GameResult(this.currentScore, this.currentMistakes, won));
             
