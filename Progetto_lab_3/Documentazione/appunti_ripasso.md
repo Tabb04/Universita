@@ -58,6 +58,7 @@
 
 
 APPUNTI PER RELAZIONE
+- Messaggi del server hanno tutti la formattazione del tipo [Thread che esegue]: ...
 - AI per if (this.currentFoundGroups == null), inizializzazione lazy di GSON dove bypassa il costruttore
 - Scelta del threadpool, forse fixed con calcolo delle cpu sarebbe stato meglio ma boh
 - Ricorda di rimuovere i commenti /**
@@ -68,8 +69,10 @@ APPUNTI PER RELAZIONE
 - Riguardare bene come stampare un oggetto json
 - Cosa cambierebbe nell'implementazione se gli utenti fossero caricati a richiesta invece che subito tutti in memoria? Dovrei cambiare tutte le funzioni?
 - Correggere import soprattutto per le altre cartelle
+- Ricorda che .addProperty(..) si usa per aggiungere valori primitivi mentre .add(...) si usa per aggiungere strutture Json complesse. Ad esempio quando stampo il messaggio di fine uso .addProperty per cose come "event: GAME_ENDED" mentre .add per cose come "groups: [{"theme": "WANE", "words:["PETER", "TAPER" ...]}] per indicare la soluzione
+- Nelle parole non usa gli apicetti "'" ma usa quello delle citazioni
 
-AL MOMENTO SONO IN SERVERMAIN -> NIOSERVER
+AL MOMENTO SONO IN SERVERMAIN -> GAMEMANAGER
 
 
 Modifiche per correzione di autologin a prossima partita
@@ -78,3 +81,86 @@ Modifiche per correzione di autologin a prossima partita
 - [x] Chiamare `broadcastNewGameStart` dal timer di `GameManager.java`
 - [x] Implementare auto-iscrizione "lazy" in `CommandProcessor.java`
 - [x] Ricompilare e verificare il progetto
+
+
+
+
+
+
+
+
+
+
+Ecco uno schema temporale dettagliato che mostra esattamente come si comporta il sistema a partire dall'avvio del server, evidenziando le interazioni tra il **Thread Principale (Main)**, il **Thread dello Scheduler** e i **Thread dei Client (via TCP/UDP)**.
+
+Assumiamo per l'esempio che una partita duri **40 secondi** (`gameDurationSeconds = 40`).
+
+---
+
+### Schema Temporale Visivo (Timeline)
+
+```text
+TEMPO (s)   THREAD PRINCIPALE (ServerMain)        THREAD SCHEDULER (GameManager)       CLIENTS (TCP/UDP)
+========================================================================================================================
+ t = 0s     [Avvio Server]
+
+
+[ignoring loop detection]
+
+Ecco lo schema temporale dettagliato che illustra il ciclo di vita del server a partire dall'avvio del primo gioco, mostrando l'interazione tra il **Thread di Avvio**, il **Thread dello Scheduler** (in background) e i **Client**.
+
+Per l'esempio, ipotizziamo una partita con durata impostata a **40 secondi**.
+
+---
+
+### Schema della Linea Temporale
+
+```text
+TEMPO (t)     THREAD DI AVVIO (Main)          THREAD DELLO SCHEDULER (GameManager)    THREAD WORKER TCP/UDP
+===========================================================================================================================
+t = 0.0s      - Chiama GameManager.start()
+              - startNextGame() (crea Partita 1)
+              - Pianifica timer fine Partita 1 
+                (in background tra 40s)
+              - Il Main finisce e si mette
+                in ascolto su porta TCP
+---------------------------------------------------------------------------------------------------------------------------
+t = 0.1s      [In attesa...]                  [Dorme e attende che scada il timer]    - I client giocano (inviano proposte)
+...                                                                                   - Il server risponde via TCP
+t = 39.9s                                                                             - Tutto gira sui thread worker TCP
+---------------------------------------------------------------------------------------------------------------------------
+t = 40.0s     [In ascolto TCP...]             - IL TIMER SCADE! Il thread si sveglia
+                                              - Chiama startNextGame() (Partita 2):
+                                                1. Cicla su tutti gli utenti e
+                                                   aggiorna i loro punteggi storici
+                                                   con resetGameState(-1)
+                                                2. Carica le parole di Partita 2
+                                                3. Assegna Partita 2 a currentGame
+                                                4. Avvia thread TCP per notificare
+                                                   "NEW_GAME_STARTED" (con sleep 1s)
+                                                5. Pianifica timer fine Partita 2
+                                                   (in background tra altri 40s)
+                                              - Invia UDP "GAME_ENDED" (soluzione 
+                                                e classifica della Partita 1)
+                                              - Torna a dormire in attesa di t = 80s
+---------------------------------------------------------------------------------------------------------------------------
+t = 40.1s     [In ascolto TCP...]             [Dorme]                                 - I client ricevono il pacchetto UDP
+                                                                                        di fine partita 1 e lo mostrano
+---------------------------------------------------------------------------------------------------------------------------
+t = 41.0s     [In ascolto TCP...]             [Dorme]                                 - Il thread TCP di notifica si sveglia
+                                                                                        (dopo la sleep di 1s)
+                                                                                      - Spedisce TCP "NEW_GAME_STARTED"
+                                                                                        a tutti i client (Partita 2)
+                                                                                      - I client caricano il nuovo gioco
+---------------------------------------------------------------------------------------------------------------------------
+t = 80.0s     [In ascolto TCP...]             - IL TIMER SCADE! Il thread si sveglia
+                                              - (Il ciclo si ripete per Partita 3)
+```
+
+---
+
+### Punti Chiave da Notare
+
+1. **Nessun Blocco del Main**: All'avvio (`t = 0s`), una volta pianificato il primo evento, il thread di boot termina la configurazione ed entra nel loop di selezione TCP (`selector.select()`). Lo scheduler lavora in modo completamente asincrono su un altro thread.
+2. **La nascita pianifica la fine**: Ogni volta che viene avviata una partita dentro `startNextGame()`, la primissima cosa che viene fatta a fine metodo è registrare l'evento di chiusura programmato a `t + 40s`. Questo rende il ciclo infinito autosufficiente.
+3. **Nessuna sovrapposizione**: Visto che lo scheduler è a *singolo thread* (`SingleThreadScheduledExecutor`), se per qualsiasi motivo un'operazione di rotazione partita dovesse subire un rallentamento (es. scrittura su disco lenta), il timer della partita successiva non partirebbe "in anticipo" rischiando collisioni, ma verrebbe calcolato in modo sequenziale perfetto dal momento dell'effettiva inizializzazione della nuova partita.

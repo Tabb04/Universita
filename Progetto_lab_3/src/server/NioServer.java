@@ -258,8 +258,7 @@ public class NioServer{
 //---------------------------------------------------------------------------------------
 
 
-    //NOTIFICA ASINCRONA DEL FINE PARTITA + STATISTICHE ??
-
+    //NOTIFICA ASINCRONA DEL FINE PARTITA + STATISTICHE (classifica della parita e statistiche personali)
     public void broadcastGameEnd(int gameId){
 
         JsonObject payload = new JsonObject();
@@ -296,6 +295,7 @@ public class NioServer{
         matchParticipants.sort((u1, u2) -> Integer.compare(u2.getHistory().get(gameId).score, u1.getHistory().get(gameId).score));
         
 
+        //Array per il payload
         JsonArray matchLeaderArray = new JsonArray();
         //Come per la leaderbaord scorro in ordine decrescente e aggiungo le statistiche
         for(int i = 0; i < matchParticipants.size(); i++){
@@ -310,38 +310,42 @@ public class NioServer{
 
         payload.add("matchLeaderboard", matchLeaderArray);
 
-
-
-
-
         
         // Cicliamo tra tutti gli utenti noti attivi e personalizziamo il payload
+        //entrySet() mi da un set con coppia chiave valore della hashmap
         for(Map.Entry<String, InetSocketAddress> entry : userUdpAddresses.entrySet()){
+
             String username = entry.getKey();
             InetSocketAddress address = entry.getValue();
+            //Ricavo l'utente
             User user = registeredUsers.get(username);
             
+            //Faccio una copia del payload da personalizzare per ogni utente
             JsonObject userPayload = payload.deepCopy();
             
-            if (user != null) {
+            if(user != null){
+
                 User.GameResult result = user.getHistory().get(gameId);
-                if (result != null) {
+                //Se ha partecipato
+                if(result != null){
                     userPayload.addProperty("participated", true);
                     userPayload.addProperty("myMistakes", result.mistakes);
                     userPayload.addProperty("myScore", result.score);
                     userPayload.addProperty("won", result.won);
-                } else {
+                }else{
                     userPayload.addProperty("participated", false);
                 }
             }
             
+            //Converto l'oggetto in Json e poi in array di byte
             byte[] buffer = gson.toJson(userPayload).getBytes(StandardCharsets.UTF_8);
             
-            try {
+            try{
+                //Creo pacchetto udp e lo invio
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address);
                 udpSocket.send(packet);
-            } catch (IOException e) {
-                System.err.println("[SERVER] Errore UDP verso " + address);
+            }catch(IOException e){
+                System.err.println("[SERVER] Errore invio UDP a " + address);
             }
         }
     }
@@ -350,50 +354,42 @@ public class NioServer{
 //---------------------------------------------------------------------------------------
 
 
-/**
-     * Invia un messaggio TCP a tutti i client loggati con le nuove parole e il nuovo stato,
-     * effettuando contestualmente l'iscrizione automatica, come richiesto dalle specifiche:
-     * "riceverà le nuove parole come se avesse effettuato il login durante la partita".
-     */
-    public void broadcastNewGameStart(server.Game newGame) {
-        // Effettuiamo subito l'auto-iscrizione in modo che lo stato interno sia coerente
-        for (Map.Entry<SocketChannel, User> entry : activeConnections.entrySet()) {
+    //INVIA MESSAGGIO A TUTTI I LOGGATI CON PAROLE NUOVE 
+    public void broadcastNewGameStart(server.Game newGame){
+        //Effettuo subito l'iscrizione alla nuova partita per avere Id coerenti
+        for(Map.Entry<SocketChannel, User> entry : activeConnections.entrySet()){
             User user = entry.getValue();
             user.resetGameState(newGame.getGameId());
         }
 
-        // Lanciamo l'invio TCP in un thread separato con una piccola sleep
-        // in modo da garantire che il messaggio UDP "GAME_ENDED" venga processato e stampato prima dal client
-        new Thread(() -> {
-            try {
+
+        //Siccome il messaggio di GAME_ENDED arrivava dopo metto una sleep a quello di NEW_GAME_STARTED
+        //Mando un thread che manderà il messaggio e ritorno subito
+        new Thread(() ->{
+            
+            try{
                 Thread.sleep(1000);
-            } catch (InterruptedException e) {
+            }catch(InterruptedException e){
                 Thread.currentThread().interrupt();
             }
 
-            JsonObject baseData = new JsonObject();
-            baseData.addProperty("event", "NEW_GAME_STARTED");
-            baseData.addProperty("message", "Nuova partita iniziata!");
-            baseData.addProperty("gameId", newGame.getGameId());
-            // Aggiorniamo il tempo rimanente che nel frattempo è diminuito di 1s
-            baseData.addProperty("remainingTimeSeconds", newGame.getRemainingTimeSeconds());
+
+            JsonObject payload = new JsonObject();
+            payload.addProperty("event", "NEW_GAME_STARTED");
+            payload.addProperty("message", "Nuova partita iniziata!");
+            payload.addProperty("gameId", newGame.getGameId());
+
+            //Aggiorniamo tempo rimanente che nel frattempo è sceso di 1
+            payload.addProperty("remainingTimeSeconds", newGame.getRemainingTimeSeconds());
             
             JsonArray wordsArray = gson.toJsonTree(newGame.getAllWords()).getAsJsonArray();
-            baseData.add("words", wordsArray);
-            
-            for (Map.Entry<SocketChannel, User> entry : activeConnections.entrySet()) {
-                SocketChannel channel = entry.getKey();
-                User user = entry.getValue();
-                
-                // Creiamo un payload clonato per aggiungere lo stato specifico dell'utente
-                JsonObject userData = baseData.deepCopy();
-                userData.add("correctProposals", gson.toJsonTree(user.getCurrentFoundGroups()));
-                userData.addProperty("mistakes", user.getCurrentMistakes());
-                userData.addProperty("score", user.getCurrentScore());
-                
-                // Invio TCP
-                sendResponse(channel, JsonResponse.success(userData));
+            payload.add("words", wordsArray);
+
+            //Invio a tutti gli utenti
+            for(SocketChannel channel: activeConnections.keySet()){
+                sendResponse(channel, JsonResponse.success(payload));
             }
+
         }).start();
     }
 

@@ -217,10 +217,10 @@
   "Mattia1": {
     "username": "Mattia1",
     "password": "cazzo1",
-    "gamesPlayed": 1,
+    "gamesPlayed": 3,
     "gamesWon": 0,
     "globalScore": 18,
-    "puzzlesCompleted": 1,
+    "puzzlesCompleted": 3,
     "puzzlesWon": 0,
     "puzzlesLost": 0,
     "currentStreak": 0,
@@ -232,11 +232,21 @@
       0,
       0,
       0,
-      1
+      3
     ],
     "history": {
       "312": {
         "score": 18,
+        "mistakes": 0,
+        "won": false
+      },
+      "11": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "601": {
+        "score": 0,
         "mistakes": 0,
         "won": false
       }
@@ -245,10 +255,10 @@
   "Mattia": {
     "username": "Mattia",
     "password": "cazzo",
-    "gamesPlayed": 17,
+    "gamesPlayed": 27,
     "gamesWon": 0,
-    "globalScore": 42,
-    "puzzlesCompleted": 17,
+    "globalScore": 30,
+    "puzzlesCompleted": 27,
     "puzzlesWon": 0,
     "puzzlesLost": 1,
     "currentStreak": 0,
@@ -260,7 +270,7 @@
       0,
       0,
       1,
-      16
+      26
     ],
     "history": {
       "502": {
@@ -344,6 +354,56 @@
         "won": false
       },
       "614": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "733": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "150": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      },
+      "75": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "862": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "859": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "11": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "601": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      },
+      "787": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      },
+      "128": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "513": {
         "score": 0,
         "mistakes": 0,
         "won": false
