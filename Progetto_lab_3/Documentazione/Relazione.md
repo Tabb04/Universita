@@ -13,7 +13,7 @@ Il progetto è organizzato in una struttura modulare all'interno della root `Pro
         *   `game/`: Logica del gioco. `WordDataset` analizza i file JSON, `Game` rappresenta la singola partita in corso e `GameManager` gestisce il ciclo di vita (timer e rotazione).
         *   `model/`: Strutture dati, tra cui la classe `User` che traccia login, punteggi, errori e proposte.
         *   `network/`: Gestione del protocollo di rete del server. `NioServer` accetta i socket e smista il lavoro, mentre `CommandProcessor` elabora i comandi JSON in ingresso e produce una JSON in uscita.
-        *   `util/`: Classi di supporto. Contiene `PersistenceManager` per le operazioni I/O sul file degli utenti.
+        *   `util/`: Classi di supporto. Contiene `StorageManager` per le operazioni I/O sul file degli utenti.
     *   **`src/common/`**: Classi condivise sia dal Client che dal Server, per evitare duplicazioni.
         *   `config/`: Contiene `ConfigReader` per analizzare agilmente file `.properties`.
         *   `network/`: I DTO (Data Transfer Object) ovvero `JsonRequest` e `JsonResponse` che vengono serializzati e mandati via TCP.

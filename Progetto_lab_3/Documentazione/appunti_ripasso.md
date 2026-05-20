@@ -72,6 +72,8 @@ APPUNTI PER RELAZIONE
 - Ricorda che .addProperty(..) si usa per aggiungere valori primitivi mentre .add(...) si usa per aggiungere strutture Json complesse. Ad esempio quando stampo il messaggio di fine uso .addProperty per cose come "event: GAME_ENDED" mentre .add per cose come "groups: [{"theme": "WANE", "words:["PETER", "TAPER" ...]}] per indicare la soluzione
 - Nelle parole non usa gli apicetti "'" ma usa quello delle citazioni
 
+- Per come è nested devo avere per forza la sleep. Questo perché chiamo la nuova partita. Essa aggiorna i dati per avere lo storico pronto per il messaggio di fine, si mette a dormire un secondo e ritorna. Dopo che è ritornata parte il messaggio di fine, si sveglia l'addormatato e manda il messaggio di nuova partita. (guarda da startNextGame se vuoi capire le chiamate)
+
 AL MOMENTO SONO IN SERVERMAIN -> GAMEMANAGER
 
 

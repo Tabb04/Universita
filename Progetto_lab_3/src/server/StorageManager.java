@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  * Gestisce il salvataggio (persistenza) e il caricamento dei dati degli utenti
  * su file JSON. L'operazione di salvataggio avviene in background in modo periodico.
  */
-public class PersistenceManager {
+public class StorageManager {
     private final ConcurrentHashMap<String, User> registeredUsers;
     private final String usersFilePath;
     private Map<Integer, HistoricalGameStats> pastGames;
@@ -26,7 +26,7 @@ public class PersistenceManager {
     private final ScheduledExecutorService scheduler;
     private final Gson gson;
 
-    public PersistenceManager(ConcurrentHashMap<String, User> registeredUsers, String usersFilePath, String gamesFilePath) {
+    public StorageManager(ConcurrentHashMap<String, User> registeredUsers, String usersFilePath, String gamesFilePath) {
         this.registeredUsers = registeredUsers;
         this.usersFilePath = usersFilePath;
         this.gamesFilePath = gamesFilePath;
@@ -45,7 +45,7 @@ public class PersistenceManager {
     public void loadUsers() {
         File file = new File(usersFilePath);
         if (!file.exists()) {
-            System.out.println("[PERSISTENCE] Nessun file utenti trovato (partiamo da zero).");
+            System.out.println("[STORAGE] Nessun file utenti trovato (partiamo da zero).");
             return;
         }
 
@@ -54,16 +54,19 @@ public class PersistenceManager {
             ConcurrentHashMap<String, User> loaded = gson.fromJson(reader, type);
             if (loaded != null) {
                 registeredUsers.putAll(loaded);
-                System.out.println("[PERSISTENCE] Caricati " + loaded.size() + " utenti registrati.");
+                System.out.println("[STORAGE] Caricati " + loaded.size() + " utenti registrati.");
             }
         } catch (IOException e) {
-            System.err.println("[PERSISTENCE] Errore durante il caricamento degli utenti: " + e.getMessage());
+            System.err.println("[STORAGE] Errore durante il caricamento degli utenti: " + e.getMessage());
+
         }
     }
 
     /**
      * Carica lo storico partite dal file.
      */
+
+    //Guarda il file games.json e crea una map
     public Map<Integer, HistoricalGameStats> loadPastGames() {
         File file = new File(gamesFilePath);
         if (!file.exists()) {
@@ -73,11 +76,11 @@ public class PersistenceManager {
             Type type = new TypeToken<ConcurrentHashMap<Integer, HistoricalGameStats>>(){}.getType();
             Map<Integer, HistoricalGameStats> loaded = gson.fromJson(reader, type);
             if (loaded != null) {
-                System.out.println("[PERSISTENCE] Caricate " + loaded.size() + " statistiche di partite concluse.");
+                System.out.println("[STORAGE] Caricate " + loaded.size() + " statistiche di partite concluse.");
                 return loaded;
             }
         } catch (IOException e) {
-            System.err.println("[PERSISTENCE] Errore durante il caricamento delle partite: " + e.getMessage());
+            System.err.println("[STORAGE] Errore durante il caricamento delle partite: " + e.getMessage());
         }
         return new ConcurrentHashMap<>();
     }
@@ -86,7 +89,7 @@ public class PersistenceManager {
      * Avvia un thread schedulato per eseguire il salvataggio periodico.
      */
     public void startPeriodicSave(int intervalMinutes) {
-        System.out.println("[PERSISTENCE] Salvataggio automatico impostato ogni " + intervalMinutes + " minuti.");
+        System.out.println("[STORAGE] Salvataggio automatico impostato ogni " + intervalMinutes + " minuti.");
         scheduler.scheduleAtFixedRate(this::saveAll, intervalMinutes, intervalMinutes, TimeUnit.MINUTES);
     }
     
@@ -106,9 +109,9 @@ public class PersistenceManager {
             // Gson serializza la mappa tranquillamente, ed eviterà
             // di salvare le variabili 'transient' in User (es. la partita in corso)
             gson.toJson(registeredUsers, writer);
-            System.out.println("[PERSISTENCE] Utenti salvati con successo su disco.");
+            System.out.println("[STORAGE] Utenti salvati con successo su disco.");
         } catch (IOException e) {
-            System.err.println("[PERSISTENCE] Fallito il salvataggio utenti: " + e.getMessage());
+            System.err.println("[STORAGE] Fallito il salvataggio utenti: " + e.getMessage());            
         }
     }
     
@@ -122,9 +125,10 @@ public class PersistenceManager {
         
         try (FileWriter writer = new FileWriter(file)) {
             gson.toJson(pastGames, writer);
-            System.out.println("[PERSISTENCE] Partite storiche salvate con successo su disco.");
+            System.out.println("[STORAGE] Partite storiche salvate con successo su disco.");
         } catch (IOException e) {
             System.err.println("[PERSISTENCE] Fallito il salvataggio partite: " + e.getMessage());
+            System.err.println("[STORAGE] Fallito il salvataggio partite: " + e.getMessage());
         }
     }
     

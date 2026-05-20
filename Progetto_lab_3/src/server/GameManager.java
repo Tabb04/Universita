@@ -11,13 +11,10 @@ import java.util.Map;
 
 import server.NioServer;
 
-/**
- * Gestisce il ciclo di vita delle partite di Connections.
- * Si occupa di caricare il dataset, avviare il timer e ruotare la partita
- * allo scadere del tempo, oltre a mantenere uno storico statistico.
- */
-public class GameManager
-{
+
+//GESTISCE CICLO DI VITA DELLE PARTITE. CARICA DATASET, AVVIA TIMER E CAMBIA PARTITE
+public class GameManager{
+    
     private final String datasetFilePath; //Percorso del file JSON
     private int totalGamesCount = 0;
 
@@ -127,7 +124,6 @@ public class GameManager
         }
 
 
-
         //Scelgo una nuova partita casuale, on demand tramite streaming api
         WordDataset.GameData data = null;
         int attemps = 0;
@@ -153,7 +149,9 @@ public class GameManager
         Game newGame = new Game(data, gameDurationSeconds);
         currentGame.set(newGame);
         
+
         System.out.println("[GAMEMANAGER] Nuova partita casuale iniziata: ID " + newGame.getGameId() + ". Durata: " + gameDurationSeconds + "s");
+
 
         //Iscrivo automaticamente gli utenti loggati alla nuova partita e invio nuove parole
         server.broadcastNewGameStart(newGame);
@@ -176,32 +174,40 @@ public class GameManager
     }
 
 
+//---------------------------------------------------------------------------------------
+
     
-    /**
-     * Ritorna la partita correntemente attiva.
-     * @return Game attuale
-     */
-    public Game getCurrentGame() {
+    //RESTITUISCE LA PARTITA ATTIVA
+    public Game getCurrentGame(){
         return currentGame.get();
     }
+
     
-    /**
-     * Ritorna le statistiche storiche per una partita conclusa.
-     * @param gameId ID della partita
-     * @return Statistiche storiche o null se non trovata
-     */
-    public HistoricalGameStats getHistoricalStats(int gameId) {
+//---------------------------------------------------------------------------------------
+
+
+    //RESTITUISCE LE STATISTICHE PER UNA PARTITA CONCLUSA
+    public HistoricalGameStats getHistoricalStats(int gameId){
         return pastGames.get(gameId);
     }
+
     
-    public Map<Integer, HistoricalGameStats> getPastGamesMap() {
+//---------------------------------------------------------------------------------------
+
+    //RESTITUISCE RIFERIMENTO ALLA MAP DEI GIOCHI PASSATI
+    public Map<Integer, HistoricalGameStats> getPastGamesMap(){
         return this.pastGames;
     }
 
-    public void loadPastGames(Map<Integer, HistoricalGameStats> loadedGames) {
-        if (loadedGames != null && !loadedGames.isEmpty()) {
+
+//---------------------------------------------------------------------------------------
+
+
+    //PRENDE LA MAPPA CARICATA DA FILE E LA CARICA IN MEMORIA
+    public void importPastGames(Map<Integer, HistoricalGameStats> loadedGames) {
+        if(loadedGames != null && !loadedGames.isEmpty()){
             this.pastGames.putAll(loadedGames);
-            System.out.println("[GAMEMANAGER] Caricati " + loadedGames.size() + " giochi storici. Le prossime partite casuali cercheranno di evitarli finché possibile.");
+            System.out.println("[GAMEMANAGER] Caricati " + loadedGames.size() + " giochi storici");
         }
     }
 }

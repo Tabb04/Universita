@@ -4,7 +4,7 @@ import common.ConfigReader;
 import server.GameManager;
 import server.WordDataset;
 import server.NioServer;
-import server.PersistenceManager;
+import server.StorageManager;
 
 import java.util.List;
 
@@ -35,22 +35,24 @@ public class ServerMain{
         GameManager gameManager = new GameManager(datasetPath, timerSeconds, server);
         server.setGameManager(gameManager);
         
+        
         // 5. Persistenza: carica utenti precedenti e avvia timer di salvataggio in background
         String dataDir = config.getProperty("server.data.dir", "data");
         int persistInterval = config.getIntProperty("server.persistence.interval.minutes", 5);
-        PersistenceManager persistence = new PersistenceManager(server.getRegisteredUsers(), dataDir + "/users.json", dataDir + "/games.json");
-        persistence.loadUsers();
         
-        java.util.Map<Integer, GameManager.HistoricalGameStats> loadedGames = persistence.loadPastGames();
-        gameManager.loadPastGames(loadedGames);
-        persistence.setPastGamesReference(gameManager.getPastGamesMap());
+        StorageManager storage = new StorageManager(server.getRegisteredUsers(), dataDir + "/users.json", dataDir + "/games.json");
+        storage.loadUsers();
         
-        persistence.startPeriodicSave(persistInterval);
+        java.util.Map<Integer, GameManager.HistoricalGameStats> loadedGames = storage.loadPastGames();
+        gameManager.importPastGames(loadedGames);
+        storage.setPastGamesReference(gameManager.getPastGamesMap());
+        
+        storage.startPeriodicSave(persistInterval);
         
         // Aggiungiamo uno Shutdown Hook per intercettare CTRL+C (SIGINT) e salvare forzatamente i dati
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n[SERVER] Spegnimento rilevato. Salvataggio dati di emergenza in corso...");
-            persistence.stop();
+            storage.stop();
         }));
         
         // 6. Avvia GameManager (timer prima partita)
