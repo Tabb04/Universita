@@ -58,6 +58,7 @@
 
 
 APPUNTI PER RELAZIONE
+- Se vuoi cambiare i percorsi devi cambiare anche all'inzio del main server dove vengono caricati i file di proprietà
 - Messaggi del server hanno tutti la formattazione del tipo [Thread che esegue]: ...
 - AI per if (this.currentFoundGroups == null), inizializzazione lazy di GSON dove bypassa il costruttore
 - Scelta del threadpool, forse fixed con calcolo delle cpu sarebbe stato meglio ma boh
@@ -73,6 +74,9 @@ APPUNTI PER RELAZIONE
 - Nelle parole non usa gli apicetti "'" ma usa quello delle citazioni
 
 - Per come è nested devo avere per forza la sleep. Questo perché chiamo la nuova partita. Essa aggiorna i dati per avere lo storico pronto per il messaggio di fine, si mette a dormire un secondo e ritorna. Dopo che è ritornata parte il messaggio di fine, si sveglia l'addormatato e manda il messaggio di nuova partita. (guarda da startNextGame se vuoi capire le chiamate)
+- Riguarda come sarebbe stato con caricamento di tutto in memoria
+
+
 
 AL MOMENTO SONO IN SERVERMAIN -> GAMEMANAGER
 

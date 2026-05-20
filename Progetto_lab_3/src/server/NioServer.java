@@ -82,7 +82,6 @@ public class NioServer{
 
 
     //AVVIO SERVER NIO E ASCOLTO SULLA PORTA DATA
-
     public void start() throws IOException{
 
         selector = Selector.open();
@@ -134,6 +133,8 @@ public class NioServer{
     }
 
 
+//---------------------------------------------------------------------------------------
+
 
     //ACCETTA CONNESSIONE
     private void acceptConnection(SelectionKey key) throws IOException{
@@ -145,6 +146,9 @@ public class NioServer{
         client.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(8192)); //8KB ci entra tutto, predefinito dei buffered stream
         System.out.println("[SERVER] Nuova connessione TCP da " + client.getRemoteAddress());
     }
+
+
+//---------------------------------------------------------------------------------------
 
 
     //LEGGO STRINGA JSON DAL CANALE E LA PASSO AL WORKER
@@ -182,6 +186,9 @@ public class NioServer{
     }
 
 
+//---------------------------------------------------------------------------------------
+
+
     //GESTISCO DISCONNESSIONE DELL'UTENTE
     private void handleDisconnection(SocketChannel clientChannel){
         try{
@@ -203,7 +210,7 @@ public class NioServer{
     }
 
 
-
+//---------------------------------------------------------------------------------------
 //---------------------------------------------------------------------------------------
 
 
@@ -392,9 +399,5 @@ public class NioServer{
 
         }).start();
     }
-
-
-
-
 
 }

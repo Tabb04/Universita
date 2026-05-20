@@ -255,10 +255,10 @@
   "Mattia": {
     "username": "Mattia",
     "password": "cazzo",
-    "gamesPlayed": 27,
+    "gamesPlayed": 42,
     "gamesWon": 0,
-    "globalScore": 30,
-    "puzzlesCompleted": 27,
+    "globalScore": 18,
+    "puzzlesCompleted": 42,
     "puzzlesWon": 0,
     "puzzlesLost": 1,
     "currentStreak": 0,
@@ -270,7 +270,7 @@
       0,
       0,
       1,
-      26
+      41
     ],
     "history": {
       "502": {
@@ -334,8 +334,8 @@
         "won": false
       },
       "312": {
-        "score": 14,
-        "mistakes": 1,
+        "score": 0,
+        "mistakes": 0,
         "won": false
       },
       "852": {
@@ -404,6 +404,76 @@
         "won": false
       },
       "513": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "519": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "423": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      },
+      "438": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "687": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      },
+      "807": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "8": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "522": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      },
+      "370": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "383": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "49": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "183": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "492": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "534": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "177": {
         "score": 0,
         "mistakes": 0,
         "won": false

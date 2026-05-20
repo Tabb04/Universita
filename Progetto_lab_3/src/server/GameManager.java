@@ -68,7 +68,7 @@ public class GameManager{
         System.out.println("[GAMEMANAGER] Trovate " + totalGamesCount + " partite nel file " + datasetFilePath);
 
         if(totalGamesCount <= 0){
-            System.err.println("Dataset vuoto");
+            System.err.println("Nessun dato trovato");
             return;
         }
 
@@ -207,7 +207,7 @@ public class GameManager{
     public void importPastGames(Map<Integer, HistoricalGameStats> loadedGames) {
         if(loadedGames != null && !loadedGames.isEmpty()){
             this.pastGames.putAll(loadedGames);
-            System.out.println("[GAMEMANAGER] Caricati " + loadedGames.size() + " giochi storici");
+            System.out.println("[GAMEMANAGER] Caricati " + loadedGames.size() + " giochi storici in memoria.");
         }
     }
 }

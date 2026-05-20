@@ -111,6 +111,7 @@ public class CommandProcessor{
         
         //Se supero tutto lo metto nella mappa delle socketchannel-user
         server.getActiveConnections().put(channel, user);
+        System.out.println("[SERVER] Utente loggato: " + user.getUsername());
         
         //Per notifiche asincrone
         if(req.udpPort != null){    //La mando solo a login
