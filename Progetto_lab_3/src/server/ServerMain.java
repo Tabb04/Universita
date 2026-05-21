@@ -12,7 +12,7 @@ import java.util.List;
 
 public class ServerMain{
     public static void main(String[] args){
-        System.out.println("Avvio Server Connections...");
+        System.out.println("Avvio Server di Connections...");
         
     //---------------------------------------------------------------------------------------
 
@@ -25,8 +25,8 @@ public class ServerMain{
 
         long timerSeconds = config.getIntProperty("server.timer", 300); //default 5 minuti
         
-        //Rimosso vecchio caricamento in blocco delle parole ora uso streaming API
-        System.out.println("Dataset configurato: " + datasetPath);
+        //Ho tolto vecchio caricamento in blocco delle parole ora uso streaming API
+        System.out.println("Dataset delle parole configurato: " + datasetPath);
         
     //---------------------------------------------------------------------------------------
 
@@ -41,7 +41,7 @@ public class ServerMain{
         
     //---------------------------------------------------------------------------------------
         
-        // 5. LO STORAGE MANAGER: carica utenti precedenti e avvia timer di salvataggio in background ???
+        // 5. STORAGE MANAGER CARICA TUTTI GLI UTENTI PRECEDENTI E AVVIA TIMER DI SALVATAGGIO AUTOMATICO
         String dataDir = config.getProperty("server.datapath", "data"); //Cartella con parole, utenti e partite passate
         int saveInterval = config.getIntProperty("server.saveinterval", 5);  //Intervallo di auto salvataggio
         

@@ -173,6 +173,7 @@ public class CommandProcessor{
         User user = server.getActiveConnections().remove(channel);
         if(user != null){
             server.getUserUdpAddresses().remove(user.getUsername());
+            System.out.println("[SERVER] Logout utente: " + user.getUsername());
             return JsonResponse.success(new JsonObject());  //Sempre payload vuoto
         }
         return JsonResponse.error(Constants.ERR_NOT_LOGGED_IN, "Utente non loggato.");
