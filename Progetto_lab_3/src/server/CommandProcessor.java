@@ -12,10 +12,7 @@ import server.User;
 import server.Game;
 import server.WordDataset;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.HashSet;
+import java.util.*;
 
 
 //ELABORA I COMANDI INVIATI DAL CLIENT SMISTANDO IN BASE AL CAMPO OPERATION
@@ -79,6 +76,15 @@ public class CommandProcessor{
 
         
         String name = req.name.trim();
+
+        //Se qualcuno vuole fare il simpatico e chiamarsi "topPlayers" lo impedisco perché altrimenti
+        //non posso richiedere la sua posizione con requestLeaderboard
+        if(name.equalsIgnoreCase("topPlayers")){
+            return JsonResponse.error(Constants.ERR_INVALID_REQUEST, "Nome utente non consentito.");
+        }
+
+
+
 
         //Prendo la mappa degli utenti registrati
         //Faccio questa parte esclusiva per evitare doppie registrazioni
@@ -317,6 +323,11 @@ public class CommandProcessor{
         
         //Cambio nome utente (più complesso perché è la chiave della mappa registeredUsers)
         if(req.newName != null && !req.newName.isEmpty() && !req.newName.equals("-")){
+
+            if(req.newName.trim().equalsIgnoreCase("TopPlayers")){
+                return JsonResponse.error(Constants.ERR_INVALID_PROPOSAL, "Nuovo nome utente non consentito");
+            }
+
 
             //Il cambio di nome lo faccio in un blocco syncrhonized per evitare che qualcun'altro si registri con lo stesso
             //nome nello stesso istante

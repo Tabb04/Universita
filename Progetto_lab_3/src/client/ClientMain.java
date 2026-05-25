@@ -5,12 +5,8 @@ import common.JsonRequest;
 import common.Constants;
 import client.NioClient;
 
-import java.util.Arrays;
-import java.util.Scanner;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
+import java.util.regex.*;
 
 
 //MAIN DEL CLIENT. LEGGE DA RIGA DI COMANDO IN MODO BLOCCANTE E INVIA AL SERVER CON NIOCLIENT
@@ -138,8 +134,10 @@ public class ClientMain{
                 case "submitProposal":
                     if(parts.length == 5){
                         req = new JsonRequest(Constants.OP_SUBMIT_PROPOSAL);
-                        req.words = Arrays.asList(parts[1].toUpperCase(), parts[2].toUpperCase(), 
-                                                  parts[3].toUpperCase(), parts[4].toUpperCase());
+
+                        //Faccio che l'utente può scrivere anche in minuscolo
+                        req.words = Arrays.asList(parts[1].toUpperCase(), parts[2].toUpperCase(), parts[3].toUpperCase(), parts[4].toUpperCase());
+                    
                     }else{
                         System.out.println("Errore. Uso: submitProposal <w1> <w2> <w3> <w4>");
                     }
@@ -147,29 +145,50 @@ public class ClientMain{
 
                 case "requestGameInfo":
                     req = new JsonRequest(Constants.OP_REQUEST_GAME_INFO);
-                    if (parts.length > 1) {
-                        try { req.gameId = Integer.parseInt(parts[1]); } catch (Exception e) {}
+                    if(parts.length > 1){
+
+                        //parseInt mi potrebbe dare un eccezione 
+                        try{
+                            req.gameId = Integer.parseInt(parts[1]);
+                        }catch(Exception e){
+                            System.out.println("Errore. " + parts[1] + " non è un numero valido, verranno mostrate informazioni per la partita in corso.");
+                        }
                     }
                     break;
+
                 case "requestGameStats":
                     req = new JsonRequest(Constants.OP_REQUEST_GAME_STATS);
-                    if (parts.length > 1) {
-                        try { req.gameId = Integer.parseInt(parts[1]); } catch (Exception e) {}
+                    if(parts.length > 1){
+
+                        try{
+                            req.gameId = Integer.parseInt(parts[1]);
+                        }catch(Exception e){
+                            System.out.println("Errore. " + parts[1] + " non è un numero valido, verranno mostrate stats per a partita in corso");
+                        }
                     }
                     break;
+
                 case "requestPlayerStats":
+                    //Nessun parametro perché sono solo le personali
                     req = new JsonRequest(Constants.OP_REQUEST_PLAYER_STATS);
                     break;
+
                 case "requestLeaderboard":
                     req = new JsonRequest(Constants.OP_REQUEST_LEADERBOARD);
-                    if (parts.length > 1) {
-                        if (parts[1].equalsIgnoreCase("topPlayers") && parts.length > 2) {
-                            try { req.topPlayers = Integer.parseInt(parts[2]); } catch(Exception e){}
-                        } else {
+                    if(parts.length > 1){
+                        if(parts[1].equalsIgnoreCase("topPlayers") && parts.length > 2){
+                            try{
+                                req.topPlayers = Integer.parseInt(parts[2]);
+                            }catch(Exception e){
+                                System.out.println("Errore. " + parts[1] + " non è un numero valido, verrà mostrata tutta la leaderboard");
+                            }
+
+                        }else{
                             req.playerName = parts[1];
                         }
                     }
                     break;
+
                 case "exit":
                 case "quit":
                 case "close":
@@ -178,16 +197,19 @@ public class ClientMain{
                     System.out.println("Chiusura client...");
                     System.exit(0);
                     break;
+
                 case "help":
                     System.out.println("Comandi disponibili:");
                     System.out.println("register, login, logout, updateCredentials, submitProposal, requestGameInfo, requestGameStats, requestPlayerStats, requestLeaderboard, quit");
                     break;
+
                 default:
                     System.out.println("Comando sconosciuto.");
                     break;
             }
             
-            if (req != null) {
+            if(req != null){
+                //Invio la richiesta
                 client.sendRequest(req);
             }
         }

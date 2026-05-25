@@ -1,77 +1,11 @@
 {
-  "user1": {
-    "username": "user1",
-    "password": "nuovapass",
-    "gamesPlayed": 0,
-    "gamesWon": 0,
-    "globalScore": 0,
-    "puzzlesCompleted": 0,
-    "puzzlesWon": 0,
-    "puzzlesLost": 0,
-    "currentStreak": 0,
-    "maxStreak": 0,
-    "perfectPuzzles": 0,
-    "mistakeHistogram": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "history": {}
-  },
-  "Luca": {
-    "username": "Luca",
-    "password": "pass1",
-    "gamesPlayed": 0,
-    "gamesWon": 0,
-    "globalScore": 0,
-    "puzzlesCompleted": 0,
-    "puzzlesWon": 0,
-    "puzzlesLost": 0,
-    "currentStreak": 0,
-    "maxStreak": 0,
-    "perfectPuzzles": 0,
-    "mistakeHistogram": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "history": {}
-  },
-  "Mirko": {
-    "username": "Mirko",
-    "password": "pass3",
-    "gamesPlayed": 0,
-    "gamesWon": 0,
-    "globalScore": 0,
-    "puzzlesCompleted": 0,
-    "puzzlesWon": 0,
-    "puzzlesLost": 0,
-    "currentStreak": 0,
-    "maxStreak": 0,
-    "perfectPuzzles": 0,
-    "mistakeHistogram": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    "history": {}
-  },
   "Francesco": {
     "username": "Francesco",
-    "password": "cazzo",
-    "gamesPlayed": 3,
+    "password": "pelata",
+    "gamesPlayed": 4,
     "gamesWon": 0,
     "globalScore": 0,
-    "puzzlesCompleted": 3,
+    "puzzlesCompleted": 4,
     "puzzlesWon": 0,
     "puzzlesLost": 0,
     "currentStreak": 0,
@@ -83,7 +17,7 @@
       0,
       0,
       0,
-      3
+      4
     ],
     "history": {
       "221": {
@@ -97,6 +31,11 @@
         "won": false
       },
       "666": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "687": {
         "score": 0,
         "mistakes": 0,
         "won": false
@@ -153,13 +92,13 @@
     ],
     "history": {}
   },
-  "luigi": {
-    "username": "luigi",
-    "password": "passFinale",
-    "gamesPlayed": 3,
+  "Giovanni": {
+    "username": "Giovanni",
+    "password": "pelo",
+    "gamesPlayed": 1,
     "gamesWon": 0,
-    "globalScore": 18,
-    "puzzlesCompleted": 3,
+    "globalScore": -4,
+    "puzzlesCompleted": 1,
     "puzzlesWon": 0,
     "puzzlesLost": 0,
     "currentStreak": 0,
@@ -171,7 +110,35 @@
       0,
       0,
       0,
-      3
+      1
+    ],
+    "history": {
+      "340": {
+        "score": -4,
+        "mistakes": 1,
+        "won": false
+      }
+    }
+  },
+  "luigi": {
+    "username": "luigi",
+    "password": "ceppa",
+    "gamesPlayed": 4,
+    "gamesWon": 0,
+    "globalScore": 18,
+    "puzzlesCompleted": 4,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      4
     ],
     "history": {
       "0": {
@@ -181,6 +148,11 @@
       },
       "1": {
         "score": 6,
+        "mistakes": 0,
+        "won": false
+      },
+      "196": {
+        "score": 0,
         "mistakes": 0,
         "won": false
       }
@@ -216,11 +188,11 @@
   },
   "Mattia1": {
     "username": "Mattia1",
-    "password": "cazzo1",
-    "gamesPlayed": 4,
+    "password": "pelo1",
+    "gamesPlayed": 6,
     "gamesWon": 0,
     "globalScore": 18,
-    "puzzlesCompleted": 4,
+    "puzzlesCompleted": 6,
     "puzzlesWon": 0,
     "puzzlesLost": 0,
     "currentStreak": 0,
@@ -232,7 +204,7 @@
       0,
       0,
       0,
-      4
+      6
     ],
     "history": {
       "312": {
@@ -254,16 +226,59 @@
         "score": 0,
         "mistakes": 0,
         "won": false
+      },
+      "434": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "2": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      }
+    }
+  },
+  "Mirco": {
+    "username": "Mirco",
+    "password": "pass3",
+    "gamesPlayed": 2,
+    "gamesWon": 0,
+    "globalScore": 0,
+    "puzzlesCompleted": 2,
+    "puzzlesWon": 0,
+    "puzzlesLost": 0,
+    "currentStreak": 0,
+    "maxStreak": 0,
+    "perfectPuzzles": 0,
+    "mistakeHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      2
+    ],
+    "history": {
+      "578": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "25": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
       }
     }
   },
   "Mattia": {
     "username": "Mattia",
-    "password": "cazzo",
-    "gamesPlayed": 46,
+    "password": "pelo",
+    "gamesPlayed": 65,
     "gamesWon": 0,
     "globalScore": 18,
-    "puzzlesCompleted": 46,
+    "puzzlesCompleted": 65,
     "puzzlesWon": 0,
     "puzzlesLost": 1,
     "currentStreak": 0,
@@ -275,7 +290,7 @@
       0,
       0,
       1,
-      45
+      64
     ],
     "history": {
       "502": {
@@ -499,6 +514,96 @@
         "won": false
       },
       "297": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "806": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "607": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "543": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "498": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "871": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "329": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "437": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "642": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "548": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "558": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "639": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "777": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "637": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "734": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "32": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "868": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "575": {
+        "score": 0,
+        "mistakes": 0,
+        "won": false
+      },
+      "2": {
         "score": 0,
         "mistakes": 0,
         "won": false

@@ -5,8 +5,9 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import java.io.IOException;
-import java.util.List;
-import java.util.ArrayList;
+
+import java.util.*;
+
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
@@ -14,64 +15,72 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
 import common.JsonRequest;
 
-/**
- * Gestisce la rete lato client (TCP e UDP).
- * Usa NIO Selector per ascoltare i messaggi in background.
- */
-public class NioClient implements Runnable {
+
+//GESTISCE RETE LATO CLIENT, USA NIO SELECTOR PER ASCOLTARE I MESSAGGI IN BACKGROUND
+public class NioClient implements Runnable{
+
     private final String serverAddress;
     private final int serverPort;
     private final Gson gson;
     
     private SocketChannel tcpChannel;
-    private DatagramChannel udpChannel;
+    private DatagramChannel udpChannel;     //Per messaggi di fine asincroni
     private Selector selector;
     private boolean running = true;
     
-    public NioClient(String serverAddress, int serverPort) {
+
+    public NioClient(String serverAddress, int serverPort){
         this.serverAddress = serverAddress;
         this.serverPort = serverPort;
         this.gson = new Gson();
     }
+
     
-    /**
-     * Apre le connessioni e inizializza il selettore.
-     */
-    public void connect() throws IOException {
+//---------------------------------------------------------------------------------------
+
+
+    //APRE CONNESSIONI E INIZIALIZZA IL SELETTORE
+    public void connect() throws IOException{
+
         selector = Selector.open();
         
-        // Connessione TCP verso il server
+        //Connessione TCP verso il server
         tcpChannel = SocketChannel.open(new InetSocketAddress(serverAddress, serverPort));
         tcpChannel.configureBlocking(false);
-        // Buffer per i messaggi in ingresso (sincroni TCP)
+
+        //Inserisco con buffer per i messaggi in ingresso
         tcpChannel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(8192));
         
-        // Canale UDP per ricevere i broadcast asincroni (fine partita)
+        //Canale UDP per ricevere i broadcast asincroni
         udpChannel = DatagramChannel.open();
         udpChannel.configureBlocking(false);
-        udpChannel.bind(new InetSocketAddress(0)); // Porta effimera
+        udpChannel.bind(new InetSocketAddress(0));  //Porta scelta dall'os
         udpChannel.register(selector, SelectionKey.OP_READ, ByteBuffer.allocate(4096));
     }
     
-    /**
-     * Restituisce la porta UDP locale usata dal client, per comunicarla al server.
-     */
-    public int getUdpPort() {
-        try {
+
+//---------------------------------------------------------------------------------------
+
+
+    //RESTITUISCE LA PORTA UDP LOCALE USATA DAL CLIENT (comunicata a login)
+    public int getUdpPort(){
+        try{
             return ((InetSocketAddress) udpChannel.getLocalAddress()).getPort();
-        } catch (IOException e) {
+        
+        }catch(IOException e){
             return -1;
         }
     }
-    
-    /**
-     * Trasforma la richiesta in JSON e la invia.
-     */
-    public void sendRequest(JsonRequest request) {
-        try {
+
+
+//---------------------------------------------------------------------------------------
+
+
+    //TRASFORMA LA RICHIESTA IN JSON E LA INVIA
+    public void sendRequest(JsonRequest request){
+        try{
             String jsonStr = gson.toJson(request) + "\n";
             ByteBuffer buffer = ByteBuffer.wrap(jsonStr.getBytes(StandardCharsets.UTF_8));
             while (buffer.hasRemaining()) {
@@ -82,46 +91,60 @@ public class NioClient implements Runnable {
             running = false;
         }
     }
+
     
-    /**
-     * Thread in background che legge i dati in arrivo senza bloccare la Console.
-     */
-    @Override
-    public void run() {
-        try {
-            while (running && !Thread.interrupted()) {
-                selector.select(); // Attende eventi
+//---------------------------------------------------------------------------------------
+
+
+    //LEGGE I DATI IN ARRIVO
+    public void run(){
+        try{
+            while(running && !Thread.interrupted()){
+
+                selector.select();
                 Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
                 
-                while (keys.hasNext()) {
+                while(keys.hasNext()){
                     SelectionKey key = keys.next();
                     keys.remove();
                     
-                    if (!key.isValid()) continue;
+                    if(!key.isValid()){
+                        continue;
+                    }
                     
-                    if (key.isReadable()) {
-                        if (key.channel() == tcpChannel) {
-                            readTcp(key); // Dati dal server in risposta a un comando
-                        } else if (key.channel() == udpChannel) {
-                            readUdp(key); // Notifica asincrona (es. fine tempo)
+                    if(key.isReadable()){
+
+                        //Su TCP
+                        if(key.channel() == tcpChannel){
+                            readTcp(key);
+                        
+                        //Su UDP
+                        }else if(key.channel() == udpChannel){
+                            readUdp(key);
                         }
                     }
                 }
             }
-        } catch (IOException e) {
-            if (running) System.err.println("Errore di rete NioClient.");
+        }catch(IOException e){
+            if(running){
+                System.err.println("Errore di rete NioClient.");
+            }
         }
     }
     
-    /**
-     * Legge la risposta TCP e la stampa a schermo.
-     */
-    private void readTcp(SelectionKey key) throws IOException {
+//---------------------------------------------------------------------------------------
+    
+
+    //LEGGE MESSAGGIO TCP E LO STAMPA
+    private void readTcp(SelectionKey key) throws IOException{
+
         SocketChannel channel = (SocketChannel) key.channel();
         ByteBuffer buffer = (ByteBuffer) key.attachment();
         
         int bytesRead = channel.read(buffer);
-        if (bytesRead == -1) {
+        if(bytesRead == -1){
+
+            //-1 è EOF praticamente
             System.err.println("\nConnessione chiusa dal server.");
             running = false;
             System.exit(1);
@@ -134,16 +157,18 @@ public class NioClient implements Runnable {
         String msg = new String(data, StandardCharsets.UTF_8).trim();
         buffer.compact();
         
-        if (!msg.isEmpty()) {
+        if(!msg.isEmpty()){
             System.out.println("\n[SERVER] -> " + msg);
-            System.out.print("> "); // Ripristina il prompt della CLI
+            System.out.print("> ");     //Ripristino il prompt sulla cli
         }
     }
+
     
-    /**
-     * Legge il broadcast UDP.
-     */
-    private void readUdp(SelectionKey key) throws IOException {
+//---------------------------------------------------------------------------------------
+
+
+    //LEGGE MESSAGGIO BROADCAST UDP
+    private void readUdp(SelectionKey key) throws IOException{
         DatagramChannel channel = (DatagramChannel) key.channel();
         ByteBuffer buffer = (ByteBuffer) key.attachment();
 

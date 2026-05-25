@@ -77,6 +77,9 @@ APPUNTI PER RELAZIONE
 - Riguarda come sarebbe stato con caricamento di tutto in memoria
 - Non è comunque molto efficiente caricare tutte le partite vecchie in memoria
 - Controllare commenti che non ci siano riferimenti alle istruzioni e non ci siano commenti /*
+- Scelto di implementare il clintNio con un selector
+
+
 
 
 AL MOMENTO SONO IN SERVERMAIN -> GAMEMANAGER
